@@ -1,8 +1,8 @@
 {
-  "name": "ai-native-development",
+  "name": "ultra-learner",
   "version": "0.1.0",
   "private": true,
-  "description": "A minimal AI-native development starter",
+  "description": "A local-first PDF reader built with Bun and TypeScript",
   "type": "module",
   "packageManager": "bun@1.4.0",
   "engines": {
@@ -10,8 +10,17 @@
   },
   "scripts": {
     "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check:agents": "bun scripts/check-agent-notes.ts",
-    "check": "bun test && bun run check:agents"
+    "check": "bun run typecheck && bun test && bun run check:agents"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.2.108"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^7.0.2"
   }
 }

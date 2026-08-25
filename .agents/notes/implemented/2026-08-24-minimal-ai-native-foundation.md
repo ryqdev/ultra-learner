@@ -15,7 +15,7 @@ The repository uses four agent-facing primitives:
 3. `.agents/skills/` stores narrow reusable workflows. `.claude/skills` points to the same directory for client compatibility and progressive disclosure.
 4. `bun run check` is the single local completion gate. It runs behavior tests and validates the agent-facing repository structure.
 
-The repository uses TypeScript for executable product code, tests, and validation scripts. The dependency-free Bun example demonstrates a real code-and-test loop without prescribing an application framework or LLM provider, using only one typed function and one behavior test. Bun is the sole dependency manager, script runner, test runner, and lockfile owner; commands and lockfiles from other package managers are outside the project contract. An empty lockfile is not retained when the project has no dependencies. The repository owns this structure and its decisions independently; no external project's names, history, or conventions are part of its public identity.
+The repository uses TypeScript for executable product code, tests, and validation scripts. Bun is the sole dependency manager, script runner, test runner, application runtime, and lockfile owner; commands and lockfiles from other package managers are outside the project contract. A lockfile is retained when product dependencies exist and is omitted when there are none. The repository owns this structure and its decisions independently; no external project's names, history, or conventions are part of its public identity. Product-specific architecture is allowed to evolve independently while preserving this agent-facing foundation.
 
 Repository documentation and code comments use English so every supported agent entry point reads one consistent language without requiring parallel translations.
 
@@ -36,6 +36,6 @@ Repository documentation and code comments use English so every supported agent 
 - A new agent can discover project purpose, commands, constraints, and completion criteria from one short file.
 - Durable rationale and repeatable procedures remain versioned beside the code without occupying every prompt.
 - One command provides deterministic local evidence and is also suitable for CI.
-- Local development and CI use the same Bun-owned install, execution, test, and lockfile path.
+- Local development and CI use the same Bun-owned install, execution, type-check, test, and lockfile path.
 - Documentation stays concise and consistent without a localization synchronization process.
-- The repository deliberately leaves product architecture, model providers, deployment, multi-agent orchestration, and additional skills undecided until requirements justify them.
+- The foundation deliberately leaves model providers, deployment, multi-agent orchestration, and additional skills undecided until requirements justify them; product architecture is recorded in its own Agent Notes.

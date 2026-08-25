@@ -1,41 +1,44 @@
 # Architecture
 
-This repository separates product code from AI development infrastructure in two small layers.
+Ultra Learner is a single-process Bun web application with a browser-owned PDF reading session.
 
 ```text
-User request
-   ↓
-AGENTS.md ──→ Agent Notes ──→ Skill
-   ↓              ↓             ↓
-Code and tests ←── Stable decisions ←── Repeatable workflows
-   ↓
-bun run check
+PDF chosen on device ──→ browser memory ──→ PDF.js worker ──→ canvas pages
+                                ↑                    ↓
+                         reader controls ← page/zoom state
+
+Bun server ──→ HTML and CSS
+           ├─→ bundled TypeScript application
+           └─→ PDF.js worker and standard fonts
 ```
 
-## Product Layer
+## Browser application
 
-`src/` contains executable code, while `test/` verifies only observable behavior. The example has no third-party dependencies or model calls. A real project can replace this layer without changing how agents understand and verify the repository.
+`src/web/app.ts` owns the interactive reading session. It validates selected files at the browser boundary, gives their bytes directly to PDF.js, renders one high-resolution main page at a time, and creates lightweight page thumbnails. Page number, zoom, fit scale, and active render work remain ephemeral; reloading the page deliberately clears the session.
 
-## Agent Layer
+The reader never posts selected PDF bytes to an application endpoint. The privacy boundary is structural rather than policy-only: the server exposes no upload route, while browser APIs read the selected file into local memory.
 
-`AGENTS.md` contains concise, current operating rules. It covers project structure, common commands, engineering constraints, and completion criteria without carrying design history.
+`src/web/sample.ts` creates a small valid PDF in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering path rather than a separate mock screen.
 
-`.agents/notes/` is durable decision memory. It contains only rationale, genuine alternatives, and consequences that code and current-state documentation cannot express. Directory lifecycles distinguish proposals, implemented reality, and explicitly rejected directions.
+`src/lib/` contains deterministic validation and reader-state helpers. These functions have no DOM or PDF.js dependency and carry the fine-grained behavior tests.
 
-`.agents/skills/` contains progressively disclosed workflows. Agents discover a Skill by its name and description, then load its full instructions only when the task matches.
+## Bun server
 
-`bun run check` closes the feedback loop. A rule becomes repeatable evidence only when the top-level check enforces it. The current check covers product tests, Agent Note format, and compatibility symlinks. Add new invariants only when a real risk appears.
+`src/server.ts` serves `public/`, exposes a small health endpoint, bundles the TypeScript browser entry with `Bun.build`, and serves the installed PDF.js worker and standard-font assets. It accepts only `GET` and `HEAD`; there is no persistence, account, database, or upload API in this prototype.
 
-## Information Ownership
+The browser bundle is built on request so `bun run start` remains the only setup command after dependency installation. Production packaging and asset fingerprinting are intentionally deferred until deployment is in scope.
 
-- Current project rules belong in `AGENTS.md`.
-- Current architecture belongs in `docs/` or API documentation near the code.
-- Decision rationale and trade-offs belong in Agent Notes.
-- Repeatable procedures belong in Skills or `scripts/`.
-- Machine-verifiable constraints belong in tests or the top-level check.
+## PDF rendering dependency
 
-Each fact has one owner; other locations link to it. This constraint matters more than adding more documentation types.
+PDF.js is the only runtime dependency. PDF parsing is a complex, security-sensitive document-format concern and is kept out of bespoke application code. It runs in a web worker so parsing does not unnecessarily block interface interaction.
 
-## Extension Principle
+The interface itself uses browser APIs and repository-owned TypeScript, HTML, and CSS rather than a UI framework. This keeps the first prototype small while the product interaction model is still being established.
 
-Add a new layer, Skill, check, dependency, or agent role only when a requirement appears. Every non-trivial extension should identify the problem it solves, the simpler alternatives rejected, and the verification that proves it works.
+## Verification boundaries
+
+- Unit tests cover PDF file recognition, display metadata, page constraints, zoom constraints, and progress calculations.
+- HTTP tests cover the application shell, browser bundle, health endpoint, method boundary, and static-file containment.
+- `bun run typecheck` covers server, browser, test, and repository-script TypeScript.
+- Browser verification exercises the generated sample through the real PDF worker, canvas renderer, and responsive UI.
+
+`bun run check` is the repository-wide local gate and also validates the agent-facing project structure.

@@ -1,56 +1,62 @@
-# AI Native Development Starter
+# Ultra Learner
 
-An independent, minimal, and complete AI-native project starter. Here, “AI native” means the repository helps coding agents quickly acquire context, understand past decisions, invoke reusable workflows, and prove changes with deterministic checks. The product itself does not need to call a language model.
+Ultra Learner is a calm, local-first PDF reader built with Bun and TypeScript. It gives a learner a focused place to open a document, browse page thumbnails, move between pages, and adjust the reading scale without sending the file to a server.
 
-## Four Core Elements
+This is the first product prototype. It includes a built-in four-page field guide so the complete reading experience can be explored without finding a PDF first.
 
-| Element | Location | Purpose |
-| --- | --- | --- |
-| Project context | [`AGENTS.md`](AGENTS.md) | Explains what the project is, how to change it, and what completion means. |
-| Decision memory | [`.agents/notes/`](.agents/notes/README.md) | Preserves rationale, trade-offs, and consequences that code cannot express. |
-| Reusable capabilities | [`.agents/skills/`](.agents/skills/) | Packages recurring workflows as Skills loaded on demand. |
-| Feedback loop | `bun run check` | Provides machine-verifiable evidence through tests and repository checks. |
+## Try it
 
-`CLAUDE.md` points to `AGENTS.md`, and `.claude/skills` points to `.agents/skills`. Different agent entry points therefore read the same sources of truth instead of maintaining rules that can drift apart.
-
-## Quick Start
-
-Requires Bun 1.3 or newer and has no third-party runtime dependencies.
+Requires [Bun](https://bun.sh/) 1.3 or newer.
 
 ```sh
 bun install
-bun run start -- Alice
-bun run check
+bun run start
 ```
 
-The TypeScript example prints a single greeting and uses minimal code to demonstrate the edit, test, and check loop. Replace `src/` and `test/` when starting a real project while keeping the AI-native layer.
+Open `http://127.0.0.1:8881`, then drop in a PDF, choose one from the device, or open the sample field guide.
 
-## Layout
+For development with automatic server restarts:
+
+```sh
+bun run dev
+```
+
+## Current experience
+
+- Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
+- Browser-only PDF parsing; selected documents are not posted to the Bun server.
+- Page thumbnails, previous/next controls, direct page entry, reading progress, and keyboard navigation.
+- Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
+- Friendly loading, invalid-file, empty-file, and rendering error states.
+- A generated sample PDF that exercises the same reader path as uploaded documents.
+
+## Commands
+
+```sh
+bun run start       # Start the local application on port 8881.
+bun run dev         # Start with Bun watch mode.
+bun test            # Run behavior and server tests.
+bun run typecheck   # Check TypeScript without emitting files.
+bun run check       # Run every required local gate.
+```
+
+Set `PORT` to use another port:
+
+```sh
+PORT=4100 bun run start
+```
+
+## Project layout
 
 ```text
-.
-├── AGENTS.md                 # Canonical project instructions
-├── CLAUDE.md -> AGENTS.md    # Claude-compatible entry point
-├── .agents/
-│   ├── notes/                # Lifecycle-based decision records
-│   └── skills/project-check/ # Minimal verification workflow
-├── .claude/skills -> ../.agents/skills
-├── docs/architecture.md      # Stable current architecture
-├── scripts/check-agent-notes.ts
-├── src/index.ts
-└── test/index.test.ts
+public/             HTML and visual styles.
+src/index.ts        Application entry point.
+src/server.ts       Bun HTTP server and browser bundle endpoint.
+src/web/            PDF reader UI and generated sample document.
+src/lib/            Deterministic file and reader-state helpers.
+test/               Behavior and HTTP boundary tests.
+docs/               Stable architecture guidance.
+.agents/            Project decisions and reusable agent workflows.
 ```
 
-## Daily Workflow
-
-1. Read stable rules from `AGENTS.md` and current facts from the relevant code and documentation.
-2. Before a non-trivial change, find the owning Agent Note; update it or add a new decision record.
-3. Add a Skill only for a recurring workflow, not to preserve a one-off prompt.
-4. Update the code, tests, and affected documentation.
-5. Run `bun run check`, then inspect `git diff` and `git status`.
-
-See [`docs/architecture.md`](docs/architecture.md) for further boundaries.
-
-## Intentionally Omitted Complexity
-
-This starter does not include multi-agent orchestration, an LLM SDK, a plugin framework, a monorepo, generated documentation, localization synchronization, or many role-specific Skills. Introduce them only when a real requirement exists, with the rationale captured in an Agent Note.
+See [`docs/architecture.md`](docs/architecture.md) for the product boundaries and [`AGENTS.md`](AGENTS.md) for the repository working agreement.
