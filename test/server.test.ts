@@ -19,6 +19,9 @@ describe("web server", () => {
     expect(pageResponse.headers.get("content-type")).toContain("text/html");
     expect(page).toContain("Ultra Learner");
     expect(page).toContain("Choose PDF");
+    expect(page).toContain('id="chat-panel"');
+    expect(page).toContain('id="chat-config-form"');
+    expect(page).toContain('id="text-layer"');
 
     const healthResponse = await fetch(new URL("/health", server.url));
     expect(await healthResponse.json()).toEqual({ status: "ok" });
