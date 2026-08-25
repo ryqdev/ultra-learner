@@ -1,0 +1,17 @@
+{
+  "name": "ai-native-development",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A minimal AI-native development starter",
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "check:agents": "bun scripts/check-agent-notes.ts",
+    "check": "bun test && bun run check:agents"
+  }
+}
