@@ -1,6 +1,18 @@
 export const MIN_ZOOM = 0.6;
 export const MAX_ZOOM = 2;
 export const ZOOM_STEP = 0.1;
+export const VIM_SCROLL_STEP = 140;
+
+export type VimScrollKey = "j" | "k";
+export type VimPageKey = "d" | "u";
+
+export function vimScrollDelta(key: VimScrollKey): number {
+  return key === "j" ? VIM_SCROLL_STEP : -VIM_SCROLL_STEP;
+}
+
+export function vimPageDelta(key: VimPageKey): -1 | 1 {
+  return key === "d" ? 1 : -1;
+}
 
 export function clampPage(page: number, pageCount: number): number {
   if (pageCount < 1) return 1;

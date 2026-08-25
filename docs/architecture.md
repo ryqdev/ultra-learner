@@ -3,7 +3,7 @@
 Ultra Learner is a single-process Bun web application with a browser-owned PDF reading session.
 
 ```text
-PDF chosen on device ──→ browser memory ──→ PDF.js worker ──→ canvas pages
+PDF chosen on device ──→ browser memory ──→ PDF.js worker ──→ canvas + text layer
                                 ↑                    ↓
                          reader controls ← page/zoom state
 
@@ -16,7 +16,9 @@ Bun server ──→ HTML and CSS
 
 `src/web/app.ts` owns the interactive reading session. It validates selected files at the browser boundary, gives their bytes directly to PDF.js, renders one high-resolution main page at a time, and creates lightweight page thumbnails. Page number, zoom, fit scale, and active render work remain ephemeral; reloading the page deliberately clears the session.
 
-The reader never posts selected PDF bytes to an application endpoint. The privacy boundary is structural rather than policy-only: the server exposes no upload route, while browser APIs read the selected file into local memory.
+The reader never posts selected PDF bytes to an application endpoint. The privacy boundary is structural rather than policy-only: the server exposes no upload route, while browser APIs read the selected file into local memory. Text PDFs receive a PDF.js `TextLayer` positioned over the canvas, so browser selection and copying use the source text without changing the visual page. Image-only pages simply contribute no selectable spans.
+
+The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage. The toolbar exposes the current page and total page count through a numeric jump field. When the reader has focus, `j` and `k` move the stage by a small fixed increment and `d` and `u` change pages; form fields retain their normal typing behavior.
 
 `src/web/sample.ts` creates a small valid PDF in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering path rather than a separate mock screen.
 
@@ -36,7 +38,7 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 
 ## Verification boundaries
 
-- Unit tests cover PDF file recognition, display metadata, page constraints, zoom constraints, and progress calculations.
+- Unit tests cover PDF file recognition, display metadata, page constraints, zoom constraints, progress calculations, and Vim navigation deltas.
 - HTTP tests cover the application shell, browser bundle, health endpoint, method boundary, and static-file containment.
 - `bun run typecheck` covers server, browser, test, and repository-script TypeScript.
 - Browser verification exercises the generated sample through the real PDF worker, canvas renderer, and responsive UI.
