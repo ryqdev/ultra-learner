@@ -27,6 +27,7 @@ const dropZone = requiredElement("drop-zone");
 const fileInput = requiredElement<HTMLInputElement>("file-input");
 const chooseButton = requiredElement<HTMLButtonElement>("choose-button");
 const sampleButton = requiredElement<HTMLButtonElement>("sample-button");
+const newSessionButton = requiredElement<HTMLButtonElement>("new-session-button");
 const newFileButton = requiredElement<HTMLButtonElement>("new-file-button");
 const errorChooseButton = requiredElement<HTMLButtonElement>("error-choose-button");
 const themeButton = requiredElement<HTMLButtonElement>("theme-button");
@@ -218,6 +219,13 @@ function showReader(): void {
   window.requestAnimationFrame(fitChatPanelWidth);
 }
 
+function startNewSession(): void {
+  if (!reader.documentLoaded) return;
+  setChatCollapsed(false);
+  chat.startNewSession();
+  showToast("Started a new conversation for this PDF.");
+}
+
 function chooseFile(): void {
   fileInput.value = "";
   fileInput.click();
@@ -233,6 +241,7 @@ chooseButton.addEventListener("click", chooseFile);
 newFileButton.addEventListener("click", chooseFile);
 errorChooseButton.addEventListener("click", chooseFile);
 sampleButton.addEventListener("click", () => void openSample());
+newSessionButton.addEventListener("click", startNewSession);
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   if (file) {

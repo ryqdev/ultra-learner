@@ -102,9 +102,16 @@ export class ChatPanelController {
     this.requestController?.abort();
     this.requestController = null;
     this.messages.splice(0);
+    this.elements.prompt.value = "";
     this.clearSelection();
     this.setBusy(false);
     this.renderMessages();
+  }
+
+  /** Start a blank conversation while keeping the provider configuration for this tab. */
+  public startNewSession(): void {
+    this.resetConversation();
+    this.elements.prompt.focus();
   }
 
   public toggleVisibility(): void {
@@ -173,21 +180,31 @@ export class ChatPanelController {
     this.elements.prompt.value = "";
     this.renderMessages();
     this.setBusy(true);
-    this.requestController = new AbortController();
+    const requestController = new AbortController();
+    this.requestController = requestController;
 
     try {
-      const answer = await requestChatCompletion(this.config, this.messages, this.requestController.signal);
-      this.messages.push({ role: "assistant", content: answer });
-      this.renderMessages();
+      const answer = await requestChatCompletion(
+        this.config,
+        this.messages,
+        requestController.signal,
+        fetch,
+      );
+      if (this.requestController === requestController) {
+        this.messages.push({ role: "assistant", content: answer });
+        this.renderMessages();
+      }
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
+      if (this.requestController === requestController && !(error instanceof Error && error.name === "AbortError")) {
         const message = error instanceof Error ? error.message : "The model request could not be completed.";
         this.messages.push({ role: "assistant", content: `I couldn't reach the model: ${message}` });
         this.renderMessages();
       }
     } finally {
-      this.requestController = null;
-      this.setBusy(false);
+      if (this.requestController === requestController) {
+        this.requestController = null;
+        this.setBusy(false);
+      }
     }
   }
 

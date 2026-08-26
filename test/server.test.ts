@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createAppServer } from "../src/server.ts";
+import { CHAT_PROXY_PATH } from "../src/lib/chat.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -34,6 +35,7 @@ describe("web server", () => {
     expect(page).toContain('id="chat-resize-handle"');
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
+    expect(page).toContain('id="new-session-button"');
     expect(page).toContain('id="text-layer"');
     expect(page).toContain('id="history-list"');
     expect(page).toContain("~/.ultra-learner");
@@ -52,6 +54,81 @@ describe("web server", () => {
 
     const postResponse = await fetch(server.url, { method: "POST" });
     expect(postResponse.status).toBe(405);
+
+    const chatGetResponse = await fetch(new URL(CHAT_PROXY_PATH, server.url));
+    expect(chatGetResponse.status).toBe(405);
+    expect(chatGetResponse.headers.get("allow")).toBe("POST");
+
+    const pageResponse = await fetch(server.url);
+    expect(await pageResponse.text()).toContain('id="new-session-button"');
+  });
+
+  test("forwards chat requests through the same-origin proxy", async () => {
+    let upstreamUrl = "";
+    let upstreamInit: RequestInit | undefined;
+    server = createAppServer({
+      port: 0,
+      development: false,
+      sessionRoot: await sessionRoot(),
+      chatFetcher: async (input, init) => {
+        upstreamUrl = String(input);
+        upstreamInit = init;
+        return Response.json({ choices: [{ message: { content: "hello from provider" } }] });
+      },
+    });
+
+    const response = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer tab-secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        baseUrl: "https://provider.example/v1",
+        model: "study-model",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ choices: [{ message: { content: "hello from provider" } }] });
+    expect(upstreamUrl).toBe("https://provider.example/v1/chat/completions");
+    expect(upstreamInit?.headers).toEqual({
+      Accept: "application/json",
+      Authorization: "Bearer tab-secret",
+      "Content-Type": "application/json",
+    });
+    expect(String(upstreamInit?.body)).not.toContain("tab-secret");
+    expect(JSON.parse(String(upstreamInit?.body))).toEqual({
+      model: "study-model",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
+  });
+
+  test("returns actionable proxy errors without exposing provider details", async () => {
+    server = createAppServer({
+      port: 0,
+      development: false,
+      sessionRoot: await sessionRoot(),
+      chatFetcher: async () => { throw new Error("secret provider path"); },
+    });
+
+    const missingKey = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "m", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(missingKey.status).toBe(401);
+
+    const upstreamFailure = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
+      method: "POST",
+      headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "m", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(upstreamFailure.status).toBe(502);
+    expect(await upstreamFailure.json()).toEqual({
+      error: { message: "Unable to reach the model provider. Check the Base URL and that the provider is running." },
+    });
   });
 
   test("does not expose files outside the public directory", async () => {
