@@ -8,7 +8,7 @@ The repository needs an initial product that lets a learner open and comfortably
 
 ## Decision
 
-The first Ultra Learner product is a single-process Bun application with a local-first browser reader. Bun serves the static shell, bundles the TypeScript browser entry on request, and provides the PDF.js worker assets. PDF.js is the sole runtime dependency and parses selected file bytes in a web worker. The server has no upload endpoint, so a selected document remains in browser memory and is discarded when the page is closed or replaced.
+The first Ultra Learner product is a single-process Bun application with a local-first browser reader. Bun serves the static shell, bundles the TypeScript browser entry on request, and provides the PDF.js worker assets. PDF.js is the sole runtime dependency and parses selected file bytes in a web worker. The initial reader kept selected documents only in browser memory; the later [local PDF session history](2026-08-26-local-pdf-session-history.md) decision supersedes that ephemeral document boundary while retaining browser-owned parsing and rendering.
 
 The reader renders one main canvas page at a time and generates a thumbnail rail for navigation. Deterministic page, zoom, progress, filename, and file-validation rules live outside the DOM layer so tests can describe behavior without duplicating rendering implementation. Repository-owned HTML and CSS define the responsive interface without a UI framework.
 
@@ -30,8 +30,8 @@ A small sample PDF is generated in browser memory and passed through the same lo
 
 ## Consequences
 
-- Users can inspect the full reading experience immediately and can open their own PDF without creating an account or transferring it to the application server.
+- Users can inspect the full reading experience immediately and can open their own PDF without creating an account; user uploads now pass through the loopback application server for the local persistence defined by the session-history decision.
 - PDF.js and its worker become versioned runtime assets and Bun now owns a dependency lockfile.
 - Large documents still occupy browser memory, thumbnail generation is intentionally sequential, and the 100 MB interface limit bounds the first prototype rather than guaranteeing smooth rendering at that size.
-- Sessions, annotations, full-text search, accessibility text layers, password entry, persistence, and server-side learning features remain future product decisions.
+- Annotations, full-text search, password entry, and server-side learning features remain future product decisions; session persistence is now owned by the later session-history note.
 - The UI remains easy to replace or componentize after real usage reveals stable boundaries, but explicit DOM event wiring will become less attractive as interaction complexity grows.

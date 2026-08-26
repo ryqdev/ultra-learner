@@ -46,8 +46,8 @@
             <p class="eyebrow"><span></span>A focused space for deep reading</p>
             <h1 id="welcome-title">Make every page<br /><em>count.</em></h1>
             <p class="intro">
-              Bring your PDF into a quiet, considered reading space. No accounts, no uploads,
-              no distractions—just you and the ideas that matter.
+              Bring your PDF into a quiet, considered reading space. No accounts, no cloud,
+              no distractions—your library stays on this device.
             </p>
 
             <div class="upload-card" id="drop-zone">
@@ -63,7 +63,7 @@
                 Choose PDF
                 <svg viewBox="0 0 18 18" aria-hidden="true"><path d="m6.5 4 5 5-5 5"/></svg>
               </button>
-              <p class="upload-note">PDF only · Up to 100 MB · Never leaves your browser</p>
+              <p class="upload-note">PDF only · Up to 100 MB · Saved locally in ~/.ultra-learner</p>
             </div>
 
             <button class="sample-link" id="sample-button" type="button">
@@ -73,6 +73,18 @@
               <span><strong>Not ready with a PDF?</strong> Open the sample field guide</span>
               <svg class="arrow" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 9h11m-4-4 4 4-4 4"/></svg>
             </button>
+
+            <section class="history-section" aria-labelledby="history-title">
+              <div class="history-heading">
+                <div>
+                  <p class="history-eyebrow">Local library</p>
+                  <h2 id="history-title">Continue reading</h2>
+                </div>
+                <span id="history-count" hidden></span>
+              </div>
+              <p class="history-status" id="history-status" role="status">Loading previous sessions…</p>
+              <div class="history-list" id="history-list" aria-live="polite"></div>
+            </section>
           </div>
 
           <div class="welcome-art" aria-hidden="true">
@@ -263,7 +275,7 @@
       <footer class="site-footer" id="site-footer">
         <span>Built for curious minds.</span>
         <span class="footer-mark">UL</span>
-        <span>Your files stay private.</span>
+        <span>Your files stay local.</span>
       </footer>
     </div>
 

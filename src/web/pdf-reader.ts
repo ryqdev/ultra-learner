@@ -58,6 +58,10 @@ export interface PdfReaderCallbacks {
   onToast: (message: string) => void;
 }
 
+export interface OpenFileOptions {
+  persist?: (data: Uint8Array) => Promise<string | void>;
+}
+
 interface ReaderState {
   document: PDFDocumentProxy | null;
   loadingTask: PDFDocumentLoadingTask | null;
@@ -97,6 +101,7 @@ export class PdfReaderController {
 
   private resizeTimer: number | undefined;
   private boxStart: { x: number; y: number } | null = null;
+  private openFileVersion = 0;
 
   public constructor(
     private readonly elements: PdfReaderElements,
@@ -119,6 +124,7 @@ export class PdfReaderController {
   }
 
   public reset(): void {
+    this.openFileVersion += 1;
     this.cancelCurrentWork();
     this.state.filename = "";
     this.state.fileSize = 0;
@@ -150,7 +156,7 @@ export class PdfReaderController {
     this.elements.readerView.classList.toggle("sidebar-hidden", window.matchMedia("(max-width: 760px)").matches);
   }
 
-  public async loadPdf(data: Uint8Array, filename: string, fileSize: number): Promise<void> {
+  public async loadPdf(data: Uint8Array, filename: string, fileSize: number): Promise<boolean> {
     this.showReader();
     this.setLoading("Parsing PDF…");
     this.setControlsLoading();
@@ -178,7 +184,7 @@ export class PdfReaderController {
       const pdf = await loadingTask.promise;
       if (loadVersion !== this.state.renderVersion) {
         await loadingTask.destroy();
-        return;
+        return false;
       }
 
       this.state.document = pdf;
@@ -195,8 +201,10 @@ export class PdfReaderController {
       this.clearSelection();
       await this.renderCurrentPage(true);
       void this.renderThumbnails(pdf, loadVersion);
+      return this.state.document === pdf;
     } catch (error) {
       if (loadVersion === this.state.renderVersion) this.showError(error);
+      return false;
     }
   }
 
@@ -261,28 +269,50 @@ export class PdfReaderController {
     if (this.state.document && this.state.zoom === 1) void this.renderCurrentPage(true);
   }
 
-  public async openFile(file: File): Promise<void> {
+  public async openFile(file: File, options: OpenFileOptions = {}): Promise<void> {
     const validationError = pdfFileValidationError(file);
     if (validationError) {
       this.callbacks.onToast(validationError);
       return;
     }
 
+    const openVersion = ++this.openFileVersion;
     this.showReader();
     this.setLoading("Reading local file…");
     this.setControlsLoading();
     this.elements.documentTitle.textContent = documentTitle(file.name);
-    this.elements.documentMeta.textContent = `${formatFileSize(file.size)} · Staying on this device`;
+    this.elements.documentMeta.textContent = `${formatFileSize(file.size)} · Preparing local session…`;
     this.callbacks.onFileAccepted();
 
+    let data: Uint8Array;
     try {
-      await this.loadPdf(new Uint8Array(await file.arrayBuffer()), file.name, file.size);
+      data = new Uint8Array(await file.arrayBuffer());
     } catch (error) {
-      this.showError(error);
+      if (openVersion === this.openFileVersion) this.showError(error);
+      return;
+    }
+    if (openVersion !== this.openFileVersion) return;
+
+    // PDF.js may transfer the supplied buffer to its worker, so retain the
+    // original bytes for the local session write after parsing succeeds.
+    const loaded = await this.loadPdf(data.slice(), file.name, file.size);
+    if (!loaded || openVersion !== this.openFileVersion) return;
+
+    if (options.persist) {
+      try {
+        const persistedLabel = await options.persist(data);
+        if (persistedLabel) {
+          this.elements.documentMeta.textContent = `${this.pageCount} ${this.pageCount === 1 ? "page" : "pages"} · ${formatFileSize(file.size)} · ${persistedLabel}`;
+        }
+      } catch (error) {
+        this.elements.documentMeta.textContent = `${this.pageCount} ${this.pageCount === 1 ? "page" : "pages"} · ${formatFileSize(file.size)} · Current tab only`;
+        this.callbacks.onToast(error instanceof Error ? error.message : "Unable to save this PDF to your history.");
+      }
     }
   }
 
   public destroy(): void {
+    this.openFileVersion += 1;
     this.cancelCurrentWork();
     window.clearTimeout(this.resizeTimer);
   }

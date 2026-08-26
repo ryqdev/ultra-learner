@@ -1,11 +1,16 @@
 import { statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 
+import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
+import { SessionNotFoundError, SessionStore, type SessionStoreOptions } from "./session-store.ts";
+
 export interface AppServerOptions {
   port?: number;
   hostname?: string;
   development?: boolean;
   root?: string;
+  sessionStore?: SessionStore;
+  sessionRoot?: SessionStoreOptions["root"];
 }
 
 const contentTypes: Record<string, string> = {
@@ -20,6 +25,38 @@ const contentTypes: Record<string, string> = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
+
+class PayloadTooLargeError extends Error {}
+
+async function readRequestBytes(request: Request, maximumSize: number): Promise<Uint8Array> {
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maximumSize) {
+        await reader.cancel();
+        throw new PayloadTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const data = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return data;
+}
 
 function safeAssetPath(root: string, pathname: string): string | undefined {
   let decodedPath: string;
@@ -54,6 +91,7 @@ function isFile(path: string): boolean {
 export function createAppServer(options: AppServerOptions = {}): Bun.Server<undefined> {
   const root = options.root ?? resolve(import.meta.dir, "..");
   const publicRoot = join(root, "public");
+  const sessionStore = options.sessionStore ?? new SessionStore({ root: options.sessionRoot });
 
   return Bun.serve({
     port: options.port ?? Number(Bun.env.PORT ?? 8881),
@@ -62,12 +100,81 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
     async fetch(request) {
       const url = new URL(request.url);
 
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      if (url.pathname === "/health") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+        }
+        return Response.json({ status: "ok" });
       }
 
-      if (url.pathname === "/health") {
-        return Response.json({ status: "ok" });
+      if (url.pathname === "/api/sessions") {
+        if (request.method === "GET" || request.method === "HEAD") {
+          try {
+            return Response.json({ sessions: await sessionStore.listSessions() }, {
+              headers: { "Cache-Control": "no-store" },
+            });
+          } catch (error) {
+            console.error(error);
+            return Response.json({ error: "Unable to load the PDF session history." }, { status: 500 });
+          }
+        }
+        if (request.method === "POST") {
+          const contentLengthHeader = request.headers.get("content-length");
+          const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
+          if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_PDF_FILE_SIZE) {
+            return Response.json({ error: "That PDF is larger than 100 MB." }, { status: 413 });
+          }
+
+          const encodedFilename = request.headers.get("x-ultra-learner-filename");
+          let filename: string;
+          try {
+            filename = encodedFilename ? decodeURIComponent(encodedFilename) : "";
+          } catch {
+            return Response.json({ error: "The PDF filename is invalid." }, { status: 400 });
+          }
+
+          try {
+            const data = await readRequestBytes(request, MAXIMUM_PDF_FILE_SIZE);
+            const session = await sessionStore.createSession(filename, data);
+            return Response.json({ session }, { status: 201, headers: { "Cache-Control": "no-store" } });
+          } catch (error) {
+            if (error instanceof PayloadTooLargeError) {
+              return Response.json({ error: "That PDF is larger than 100 MB." }, { status: 413 });
+            }
+            if (error instanceof TypeError) return Response.json({ error: error.message }, { status: 400 });
+            console.error(error);
+            return Response.json({ error: "Unable to save the PDF session." }, { status: 500 });
+          }
+        }
+        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } });
+      }
+
+      const sessionDocumentMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/document$/);
+      if (sessionDocumentMatch) {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+        }
+        try {
+          const document = await sessionStore.getSessionDocument(decodeURIComponent(sessionDocumentMatch[1] ?? ""));
+          return new Response(Bun.file(document.path), {
+            headers: {
+              "Cache-Control": "no-store",
+              "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(document.summary.filename)}`,
+              "Content-Type": "application/pdf",
+              "X-Content-Type-Options": "nosniff",
+              "X-Ultra-Learner-Filename": encodeURIComponent(document.summary.filename),
+            },
+          });
+        } catch (error) {
+          if (error instanceof SessionNotFoundError || error instanceof URIError) {
+            return new Response("Not found", { status: 404 });
+          }
+          throw error;
+        }
+      }
+
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
       }
 
       if (url.pathname === "/assets/app.js") {
