@@ -12,6 +12,8 @@ The first Ultra Learner product is a single-process Bun application with a local
 
 The reader renders one main canvas page at a time and generates a thumbnail rail for navigation. Deterministic page, zoom, progress, filename, and file-validation rules live outside the DOM layer so tests can describe behavior without duplicating rendering implementation. Repository-owned HTML and CSS define the responsive interface without a UI framework.
 
+After a selected file passes local type and size validation, the reader switches views immediately and exposes the existing loading state while the browser reads the file and PDF.js parses it. Invalid candidates do not force a view transition, so a validation toast cannot strand the user in an empty reader.
+
 A small sample PDF is generated in browser memory and passed through the same loading and rendering path as a user-selected document. This makes the initial experience immediately inspectable while avoiding a binary sample fixture and preventing the demo from drifting into a separate mock implementation.
 
 ## Alternatives considered

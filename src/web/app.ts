@@ -63,7 +63,11 @@ const reader = new PdfReaderController(
     progressLabel: requiredElement("progress-label"),
     progressBar: requiredElement("progress-bar"),
   },
-  { onSelection: (selection) => chat.setSelection(selection), onToast: showToast },
+  {
+    onFileAccepted: showReader,
+    onSelection: (selection) => chat.setSelection(selection),
+    onToast: showToast,
+  },
 );
 
 function showWelcome(): void {

@@ -1,12 +1,24 @@
 export const PDF_MIME_TYPE = "application/pdf";
+export const MAXIMUM_PDF_FILE_SIZE = 100 * 1024 * 1024;
 
 export interface PdfCandidate {
   name: string;
   type: string;
 }
 
+export interface PdfFileCandidate extends PdfCandidate {
+  size: number;
+}
+
 export function isPdfFile(file: PdfCandidate): boolean {
   return file.type === PDF_MIME_TYPE || file.name.toLowerCase().endsWith(".pdf");
+}
+
+export function pdfFileValidationError(file: PdfFileCandidate): string | null {
+  if (!isPdfFile(file)) return "Please choose a PDF file.";
+  if (file.size > MAXIMUM_PDF_FILE_SIZE) return "That PDF is larger than 100 MB.";
+  if (file.size === 0) return "That PDF is empty.";
+  return null;
 }
 
 export function formatFileSize(bytes: number): string {

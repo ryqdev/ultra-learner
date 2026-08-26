@@ -9,7 +9,7 @@ import {
   type RenderTask,
 } from "pdfjs-dist";
 
-import { documentTitle, formatFileSize } from "../lib/files.ts";
+import { documentTitle, formatFileSize, pdfFileValidationError } from "../lib/files.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -52,6 +52,7 @@ export interface PdfReaderElements {
 }
 
 export interface PdfReaderCallbacks {
+  onFileAccepted: () => void;
   onSelection: (selection: SelectionContext | null) => void;
   onToast: (message: string) => void;
 }
@@ -69,8 +70,6 @@ interface ReaderState {
   renderVersion: number;
   selectionMode: SelectionSource;
 }
-
-const maximumFileSize = 100 * 1024 * 1024;
 
 function isRenderingCancelled(error: unknown): boolean {
   return error instanceof Error && error.name === "RenderingCancelledException";
@@ -152,7 +151,7 @@ export class PdfReaderController {
 
   public async loadPdf(data: Uint8Array, filename: string, fileSize: number): Promise<void> {
     this.showReader();
-    this.setLoading("Opening document…");
+    this.setLoading("Parsing PDF…");
     this.setControlsLoading();
     this.elements.documentTitle.textContent = documentTitle(filename);
     this.elements.documentMeta.textContent = `${formatFileSize(fileSize)} · Validating PDF…`;
@@ -249,19 +248,24 @@ export class PdfReaderController {
   }
 
   public async openFile(file: File): Promise<void> {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      this.callbacks.onToast("Please choose a PDF file.");
+    const validationError = pdfFileValidationError(file);
+    if (validationError) {
+      this.callbacks.onToast(validationError);
       return;
     }
-    if (file.size > maximumFileSize) {
-      this.callbacks.onToast("That PDF is larger than 100 MB.");
-      return;
+
+    this.showReader();
+    this.setLoading("Reading local file…");
+    this.setControlsLoading();
+    this.elements.documentTitle.textContent = documentTitle(file.name);
+    this.elements.documentMeta.textContent = `${formatFileSize(file.size)} · Staying on this device`;
+    this.callbacks.onFileAccepted();
+
+    try {
+      await this.loadPdf(new Uint8Array(await file.arrayBuffer()), file.name, file.size);
+    } catch (error) {
+      this.showError(error);
     }
-    if (file.size === 0) {
-      this.callbacks.onToast("That PDF is empty.");
-      return;
-    }
-    await this.loadPdf(new Uint8Array(await file.arrayBuffer()), file.name, file.size);
   }
 
   public destroy(): void {
