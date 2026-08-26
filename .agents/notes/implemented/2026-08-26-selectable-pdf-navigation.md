@@ -16,7 +16,7 @@ The browser reader overlays PDF.js `TextLayer` on the existing canvas using the 
 
 **Use PDF.js's full viewer component.** It supplies text selection and navigation, but would replace the repository-owned reader layout and introduce a larger integration surface than this focused change needs.
 
-**Bind Vim keys globally without target checks.** This is shorter, but it would hijack page-number entry and text-area editing.
+**Bind Vim keys globally without target checks.** This is shorter, but it would hijack page-number entry, provider forms, and text-area editing.
 
 ## Consequences
 

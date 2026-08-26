@@ -6,10 +6,12 @@ export const VIM_SCROLL_STEP = 140;
 export type VimScrollKey = "j" | "k";
 export type VimPageKey = "d" | "u";
 
+/** Return the small vertical movement associated with Vim's line keys. */
 export function vimScrollDelta(key: VimScrollKey): number {
   return key === "j" ? VIM_SCROLL_STEP : -VIM_SCROLL_STEP;
 }
 
+/** Return the document-page movement associated with Vim's page keys. */
 export function vimPageDelta(key: VimPageKey): -1 | 1 {
   return key === "d" ? 1 : -1;
 }
