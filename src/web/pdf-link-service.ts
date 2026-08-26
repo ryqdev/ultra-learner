@@ -22,6 +22,7 @@ export class ReaderPdfLinkService {
   public readonly externalLinkTarget = null;
   public readonly externalLinkRel = EXTERNAL_LINK_REL;
   private document: PDFDocumentProxy | null = null;
+  private baseUrl = "";
 
   public constructor(
     private readonly reader: PdfLinkReader,
@@ -30,6 +31,7 @@ export class ReaderPdfLinkService {
 
   public setDocument(document: PDFDocumentProxy | null): void {
     this.document = document;
+    this.baseUrl = document ? window.location.href.split("#", 1)[0] ?? "" : "";
   }
 
   public get pagesCount(): number {
@@ -91,7 +93,7 @@ export class ReaderPdfLinkService {
   }
 
   public getAnchorUrl(anchor: string): string {
-    return anchor;
+    return this.baseUrl ? `${this.baseUrl}${anchor}` : anchor;
   }
 
   public executeNamedAction(action: string): void {
