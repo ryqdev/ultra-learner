@@ -20,6 +20,8 @@ describe("web server", () => {
     expect(page).toContain("Ultra Learner");
     expect(page).toContain("Choose PDF");
     expect(page).toContain('id="chat-panel"');
+    expect(page).toContain('id="chat-resize-handle"');
+    expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('id="text-layer"');
 

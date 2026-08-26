@@ -107,7 +107,7 @@
             <div class="thumbnail-list" id="thumbnail-list"></div>
           </aside>
 
-          <div class="reader-main">
+          <div class="reader-main" id="reader-main">
             <div class="document-bar">
               <button class="document-icon" id="sidebar-toggle" type="button" aria-label="Toggle page thumbnails" title="Toggle page thumbnails">
                 <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 3.5h14v15H4v-15Z"/><path d="M8 3.5v15M10.5 7h5m-5 4h5m-5 4h3.5"/></svg>
@@ -194,6 +194,16 @@
           </div>
 
           <aside class="chat-panel" id="chat-panel" aria-label="AI study guide">
+            <div
+              class="chat-resize-handle"
+              id="chat-resize-handle"
+              role="separator"
+              tabindex="0"
+              aria-label="Resize AI study guide"
+              aria-controls="reader-main chat-panel"
+              aria-orientation="vertical"
+              title="Drag to resize AI study guide"
+            ></div>
             <div class="chat-panel-header">
               <div>
                 <p class="chat-eyebrow"><span></span>Study companion</p>

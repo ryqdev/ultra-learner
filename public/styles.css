@@ -728,7 +728,10 @@ main {
 .reader-view {
   position: relative;
   display: grid;
-  grid-template-columns: 210px minmax(280px, 1fr) minmax(260px, 340px);
+  grid-template-columns:
+    210px
+    minmax(var(--reader-main-min-width), 1fr)
+    minmax(var(--chat-panel-min-width), var(--chat-panel-width));
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -750,7 +753,10 @@ main {
 }
 
 .reader-view.sidebar-hidden {
-  grid-template-columns: 0 minmax(280px, 1fr) minmax(260px, 340px);
+  grid-template-columns:
+    0
+    minmax(var(--reader-main-min-width), 1fr)
+    minmax(var(--chat-panel-min-width), var(--chat-panel-width));
 }
 
 .reader-view.chat-collapsed {
@@ -1315,12 +1321,56 @@ main {
 }
 
 .chat-panel {
+  position: relative;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   min-width: 0;
   min-height: 0;
   border-left: 1px solid rgba(74, 84, 78, 0.14);
   background: rgba(255, 253, 248, 0.82);
+}
+
+.chat-resize-handle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.chat-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 2px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--green-bright);
+  opacity: 0.22;
+  transform: translateY(-50%);
+  transition: opacity 140ms ease, height 140ms ease;
+}
+
+.chat-resize-handle:hover::after,
+.chat-resize-handle:focus-visible::after,
+.chat-resize-handle.is-dragging::after {
+  height: 64px;
+  opacity: 0.78;
+}
+
+.chat-resize-handle:focus-visible {
+  outline: 3px solid rgba(47, 101, 86, 0.28);
+  outline-offset: -3px;
+}
+
+body.is-resizing-chat,
+body.is-resizing-chat * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .chat-panel.is-collapsed {
@@ -1864,6 +1914,10 @@ body.is-dark .thumbnail-item.is-active {
     bottom: 0;
     width: min(360px, calc(100vw - 24px));
     box-shadow: -15px 0 35px rgba(30, 40, 35, 0.18);
+  }
+
+  .chat-resize-handle {
+    display: none;
   }
 
   .chat-panel.is-collapsed {

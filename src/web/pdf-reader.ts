@@ -247,6 +247,10 @@ export class PdfReaderController {
     this.elements.readerView.classList.add("sidebar-hidden");
   }
 
+  public refreshLayout(): void {
+    if (this.state.document && this.state.zoom === 1) void this.renderCurrentPage(true);
+  }
+
   public async openFile(file: File): Promise<void> {
     const validationError = pdfFileValidationError(file);
     if (validationError) {
@@ -304,7 +308,7 @@ export class PdfReaderController {
     window.addEventListener("resize", () => {
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => {
-        if (this.state.document && this.state.zoom === 1) void this.renderCurrentPage(true);
+        this.refreshLayout();
       }, 180);
     });
   }
