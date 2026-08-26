@@ -3,6 +3,12 @@ import { ChatPanelController } from "./chat-panel.ts";
 import { requiredElement } from "./dom.ts";
 import { PdfReaderController } from "./pdf-reader.ts";
 import {
+  listSessions,
+  loadSessionPdf,
+  saveSession,
+  sessionMeta,
+} from "./session-history.ts";
+import {
   DEFAULT_CHAT_PANEL_WIDTH,
   MAX_CHAT_PANEL_WIDTH,
   MIN_CHAT_PANEL_WIDTH,
@@ -11,6 +17,7 @@ import {
 } from "../lib/layout.ts";
 import { readerKeyboardAction } from "../lib/reader.ts";
 import type { SelectionSource } from "../lib/selection.ts";
+import type { SessionSummary } from "../lib/sessions.ts";
 
 const appShell = requiredElement("app-shell");
 const welcomeView = requiredElement("welcome-view");
@@ -33,6 +40,9 @@ const readerMain = requiredElement("reader-main");
 const textSelectMode = requiredElement<HTMLButtonElement>("text-select-mode");
 const boxSelectMode = requiredElement<HTMLButtonElement>("box-select-mode");
 const toast = requiredElement("toast");
+const historyList = requiredElement("history-list");
+const historyStatus = requiredElement("history-status");
+const historyCount = requiredElement("history-count");
 
 readerView.style.setProperty("--chat-panel-min-width", `${MIN_CHAT_PANEL_WIDTH}px`);
 readerView.style.setProperty("--chat-panel-width", `${DEFAULT_CHAT_PANEL_WIDTH}px`);
@@ -44,6 +54,8 @@ chatResizeHandle.setAttribute("aria-valuenow", String(DEFAULT_CHAT_PANEL_WIDTH))
 let toastTimer: number | undefined;
 let chatResizePointerId: number | null = null;
 let chatResizeStart: { pointerX: number; panelWidth: number } | null = null;
+let sessions: SessionSummary[] = [];
+let openingSessionId: string | null = null;
 
 function showToast(message: string): void {
   toast.textContent = message;
@@ -97,6 +109,103 @@ function showWelcome(): void {
   readerView.hidden = true;
   siteFooter.hidden = false;
   document.title = "Ultra Learner — PDF Reader";
+  void refreshHistory();
+}
+
+function historyItem(session: SessionSummary): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "history-item";
+  button.dataset.sessionId = session.id;
+  button.disabled = openingSessionId !== null;
+  button.setAttribute("aria-label", `Open ${session.filename}`);
+
+  const icon = document.createElement("span");
+  icon.className = "history-item-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = '<svg viewBox="0 0 20 20"><path d="M5 2.5h7l3 3v12H5v-15Z"/><path d="M12 2.5v3h3M7.5 10h5m-5 3h4"/></svg>';
+
+  const copy = document.createElement("span");
+  copy.className = "history-item-copy";
+  const filename = document.createElement("strong");
+  filename.textContent = session.filename;
+  const metadata = document.createElement("span");
+  metadata.textContent = openingSessionId === session.id ? "Opening local session…" : sessionMeta(session);
+  copy.append(filename, metadata);
+
+  const arrow = document.createElement("span");
+  arrow.className = "history-item-arrow";
+  arrow.setAttribute("aria-hidden", "true");
+  arrow.textContent = "→";
+  button.append(icon, copy, arrow);
+  return button;
+}
+
+function renderHistory(): void {
+  historyList.replaceChildren(...sessions.map(historyItem));
+  historyCount.hidden = sessions.length === 0;
+  historyCount.textContent = `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`;
+  if (sessions.length === 0) {
+    historyStatus.textContent = "Your uploaded PDFs will appear here.";
+    historyStatus.hidden = false;
+  } else {
+    historyStatus.hidden = true;
+  }
+}
+
+async function refreshHistory(): Promise<void> {
+  historyStatus.classList.remove("is-error");
+  if (sessions.length === 0) {
+    historyStatus.textContent = "Loading previous sessions…";
+    historyStatus.hidden = false;
+  }
+  try {
+    sessions = await listSessions();
+    renderHistory();
+  } catch (error) {
+    historyList.replaceChildren();
+    historyCount.hidden = true;
+    historyStatus.hidden = false;
+    historyStatus.classList.add("is-error");
+    historyStatus.textContent = error instanceof Error ? error.message : "Unable to load your PDF history.";
+  }
+}
+
+async function openSession(session: SessionSummary): Promise<void> {
+  if (openingSessionId) return;
+  openingSessionId = session.id;
+  renderHistory();
+  try {
+    const data = await loadSessionPdf(session);
+    showReader();
+    await reader.loadPdf(data, session.filename, session.fileSize);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "Unable to open this PDF session.");
+    await refreshHistory();
+  } finally {
+    openingSessionId = null;
+    if (!welcomeView.hidden) renderHistory();
+  }
+}
+
+historyList.addEventListener("click", (event) => {
+  const target = event.target instanceof Element
+    ? event.target.closest<HTMLButtonElement>("[data-session-id]")
+    : null;
+  if (!target) return;
+  const session = sessions.find((candidate) => candidate.id === target.dataset.sessionId);
+  if (session) void openSession(session);
+});
+
+async function openUploadedFile(file: File): Promise<void> {
+  await reader.openFile(file, {
+    persist: async (data) => {
+      const session = await saveSession(file, data);
+      sessions = [session, ...sessions];
+      showToast("PDF saved to your local history.");
+      return "Saved locally";
+    },
+  });
 }
 
 function showReader(): void {
@@ -127,7 +236,7 @@ sampleButton.addEventListener("click", () => void openSample());
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   if (file) {
-    void reader.openFile(file);
+    void openUploadedFile(file);
   }
 });
 
@@ -148,7 +257,7 @@ for (const eventName of ["dragleave", "drop"] as const) {
 dropZone.addEventListener("drop", (event) => {
   const file = event.dataTransfer?.files[0];
   if (file) {
-    void reader.openFile(file);
+    void openUploadedFile(file);
   }
 });
 
