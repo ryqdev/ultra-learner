@@ -15,6 +15,7 @@ import {
   MIN_ZOOM,
   vimScrollDelta,
   clampPage,
+  isVimScrollBoundary,
   nextZoom,
   readingProgress,
   vimPageDelta,
@@ -225,6 +226,15 @@ export class PdfReaderController {
   /** Move the reading viewport by one Vim-style line or page. */
   public vimNavigate(key: "j" | "k" | "d" | "u"): void {
     if (key === "j" || key === "k") {
+      if (isVimScrollBoundary(
+        key,
+        this.elements.readerStage.scrollTop,
+        this.elements.readerStage.clientHeight,
+        this.elements.readerStage.scrollHeight,
+      )) {
+        void this.goToPage(this.state.page + (key === "j" ? 1 : -1));
+        return;
+      }
       this.elements.readerStage.scrollBy({ top: vimScrollDelta(key), behavior: "auto" });
       return;
     }

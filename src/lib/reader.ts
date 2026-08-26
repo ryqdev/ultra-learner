@@ -11,6 +11,17 @@ export function vimScrollDelta(key: VimScrollKey): number {
   return key === "j" ? VIM_SCROLL_STEP : -VIM_SCROLL_STEP;
 }
 
+/** Return whether a Vim scroll key is already at the corresponding viewport edge. */
+export function isVimScrollBoundary(
+  key: VimScrollKey,
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+): boolean {
+  if (key === "k") return scrollTop <= 0;
+  return scrollTop + clientHeight >= scrollHeight;
+}
+
 /** Return the document-page movement associated with Vim's page keys. */
 export function vimPageDelta(key: VimPageKey): -1 | 1 {
   return key === "d" ? 1 : -1;
