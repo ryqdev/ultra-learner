@@ -3,9 +3,12 @@ import { extname, join, normalize, resolve } from "node:path";
 
 import {
   CHAT_PROXY_PATH,
+  CHAT_TEST_MESSAGE,
+  CHAT_TEST_PATH,
   chatCompletionsUrl,
   MAXIMUM_CHAT_REQUEST_SIZE,
   parseChatProxyPayload,
+  parseChatTestPayload,
   type ChatFetcher,
 } from "./lib/chat.ts";
 import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
@@ -176,6 +179,82 @@ async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Prom
   }
 }
 
+async function forwardChatRequest(
+  request: Request,
+  fetcher: ChatFetcher,
+  payload: { baseUrl: string; model: string; messages: Array<{ role: "system" | "user" | "assistant"; content: string }> },
+  missingPayloadMessage: string,
+): Promise<Response> {
+  const authorization = bearerToken(request);
+  if (!authorization) return jsonError("An API key is required.", 401);
+
+  const upstreamUrl = chatCompletionsUrl(payload.baseUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CHAT_PROVIDER_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetcher(upstreamUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: authorization,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: payload.model, messages: payload.messages, stream: false }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return jsonError("The model provider timed out. Check the provider and try again.", 504);
+    }
+    return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
+  }
+  try {
+    const body = await readResponseText(response, MAXIMUM_CHAT_RESPONSE_SIZE);
+    return new Response(body, {
+      status: response.status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    if (controller.signal.aborted) return jsonError("The model provider timed out. Check the provider and try again.", 504);
+    if (error instanceof PayloadTooLargeError) return jsonError("The model response is too large.", 502);
+    return jsonError(missingPayloadMessage, 502);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function testChatProvider(request: Request, fetcher: ChatFetcher): Promise<Response> {
+  const authorization = bearerToken(request);
+  if (!authorization) return jsonError("An API key is required.", 401);
+
+  const contentLengthHeader = request.headers.get("content-length");
+  const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
+  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_CHAT_REQUEST_SIZE) {
+    return jsonError("The chat test request is too large.", 413);
+  }
+
+  let payload: ReturnType<typeof parseChatTestPayload>;
+  try {
+    const bytes = await readRequestBytes(request, MAXIMUM_CHAT_REQUEST_SIZE);
+    payload = parseChatTestPayload(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return jsonError("The chat test request is too large.", 413);
+    if (error instanceof Error) return jsonError(error.message, 400);
+    return jsonError("Unable to read the chat test request.", 400);
+  }
+
+  return forwardChatRequest(request, fetcher, {
+    baseUrl: payload.baseUrl,
+    model: payload.model,
+    messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
+  }, "Unable to read the model provider response.");
+}
+
 function safeAssetPath(root: string, pathname: string): string | undefined {
   let decodedPath: string;
   try {
@@ -231,6 +310,13 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
           return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
         }
         return proxyChatCompletion(request, chatFetcher);
+      }
+
+      if (url.pathname === CHAT_TEST_PATH) {
+        if (request.method !== "POST") {
+          return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
+        }
+        return testChatProvider(request, chatFetcher);
       }
 
       if (url.pathname === "/api/sessions") {
