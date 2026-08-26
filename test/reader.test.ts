@@ -5,6 +5,7 @@ import {
   MIN_ZOOM,
   clampPage,
   clampZoom,
+  isVimScrollBoundary,
   nextZoom,
   readerKeyboardAction,
   readingProgress,
@@ -58,5 +59,14 @@ describe("reader state helpers", () => {
     expect(readerKeyboardAction("d", {})).toBe("d");
     expect(readerKeyboardAction("j", { metaKey: true })).toBeNull();
     expect(readerKeyboardAction("d", { altKey: true })).toBeNull();
+  });
+
+  test("detects the viewport edge for Vim scroll keys", () => {
+    expect(isVimScrollBoundary("j", 600, 400, 1000)).toBe(true);
+    expect(isVimScrollBoundary("j", 599, 400, 1000)).toBe(false);
+    expect(isVimScrollBoundary("k", 0, 400, 1000)).toBe(true);
+    expect(isVimScrollBoundary("k", 1, 400, 1000)).toBe(false);
+    expect(isVimScrollBoundary("j", 0, 400, 400)).toBe(true);
+    expect(isVimScrollBoundary("k", 0, 400, 400)).toBe(true);
   });
 });

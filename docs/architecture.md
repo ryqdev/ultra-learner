@@ -26,7 +26,7 @@ The PDF page surface has two selection modes. Text mode uses PDF.js's transparen
 
 On desktop, the separator on the AI guide's left edge adjusts its grid track with pointer dragging or the arrow keys. The width is bounded to keep both the guide and main reading surface usable, and fitting is recalculated after the layout changes. Compact screens keep the guide as a fixed-width overlay instead of exposing the resize interaction.
 
-The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage. The toolbar exposes the current page and total page count through a numeric jump field. When the reader has focus, `j` and `k` move the stage by a small fixed increment and `d` and `u` change pages; form fields retain their normal typing behavior.
+The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage. The toolbar exposes the current page and total page count through a numeric jump field. When the reader has focus, `j` and `k` move the stage by a small fixed increment and change to the next or previous page when the matching scroll edge has been reached; `d` and `u` change pages directly. Form fields retain their normal typing behavior.
 
 `src/web/sample.ts` creates a small valid PDF in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering path rather than a separate mock screen.
 
