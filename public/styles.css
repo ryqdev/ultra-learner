@@ -1401,9 +1401,17 @@ main {
   background: rgba(74, 84, 78, 0.15);
 }
 
-.reading-progress {
+.toolbar-status {
   position: absolute;
   right: 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.reading-progress {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1414,8 +1422,6 @@ main {
 }
 
 .keyboard-hint {
-  position: absolute;
-  right: 100px;
   color: var(--muted);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 8px;
@@ -2123,6 +2129,10 @@ body.is-dark .thumbnail-item.is-active {
     justify-content: space-between;
     gap: 7px;
     padding: 0 10px;
+  }
+
+  .toolbar-status {
+    right: 10px;
   }
 
   .keyboard-hint {
