@@ -8,7 +8,7 @@ The reader displayed each PDF page only as a canvas, so text PDFs could not be s
 
 ## Decision
 
-The browser reader overlays PDF.js `TextLayer` on the existing canvas using the same viewport and scale. The layer remains visually transparent while its positioned spans provide native browser text selection. The thumbnail rail is a constrained flex child with explicit vertical overflow, so its scroll position is independent of the document stage. The existing current-page input remains the page-jump control and is labelled with its total page count. Vim-style navigation is handled at the application boundary: `j`/`k` scroll the reader stage by a fixed 140-pixel step, while `d`/`u` move one page; editable fields and modifier-key shortcuts are excluded.
+The browser reader overlays PDF.js `TextLayer` on the existing canvas using the same viewport and scale. The layer remains visually transparent while its positioned spans provide native browser text selection. The thumbnail rail is a constrained flex child with explicit vertical overflow, so its scroll position is independent of the document stage. The existing current-page input remains the page-jump control and is labelled with its total page count. Vim-style navigation is handled at the application boundary: `j`/`k` scroll the reader stage by a fixed 140-pixel step, while `d`/`u` move one page; editable fields and modifier-key shortcuts are excluded. Browser zoom shortcuts remain native so `Command`/`Control` with `+` or `-` scales the whole application, while PDF-only zoom stays on the reader toolbar.
 
 ## Alternatives considered
 

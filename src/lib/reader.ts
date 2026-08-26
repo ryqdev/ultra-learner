@@ -5,6 +5,25 @@ export const VIM_SCROLL_STEP = 140;
 
 export type VimScrollKey = "j" | "k";
 export type VimPageKey = "d" | "u";
+export type ReaderKeyboardAction = "close-sidebar" | VimScrollKey | VimPageKey;
+
+export interface ReaderKeyboardModifiers {
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}
+
+/** Return only shortcuts owned by the reader, leaving browser shortcuts untouched. */
+export function readerKeyboardAction(
+  key: string,
+  modifiers: ReaderKeyboardModifiers,
+): ReaderKeyboardAction | null {
+  if (modifiers.altKey) return null;
+  if (key === "Escape") return "close-sidebar";
+  if (modifiers.metaKey || modifiers.ctrlKey) return null;
+  if (key === "j" || key === "k" || key === "d" || key === "u") return key;
+  return null;
+}
 
 /** Return the small vertical movement associated with Vim's line keys. */
 export function vimScrollDelta(key: VimScrollKey): number {

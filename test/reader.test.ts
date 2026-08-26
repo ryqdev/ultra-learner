@@ -6,6 +6,7 @@ import {
   clampPage,
   clampZoom,
   nextZoom,
+  readerKeyboardAction,
   readingProgress,
   VIM_SCROLL_STEP,
   vimPageDelta,
@@ -42,5 +43,20 @@ describe("reader state helpers", () => {
     expect(vimScrollDelta("k")).toBe(-VIM_SCROLL_STEP);
     expect(vimPageDelta("d")).toBe(1);
     expect(vimPageDelta("u")).toBe(-1);
+  });
+
+  test("leaves browser zoom shortcuts unhandled", () => {
+    expect(readerKeyboardAction("+", { metaKey: true })).toBeNull();
+    expect(readerKeyboardAction("=", { metaKey: true })).toBeNull();
+    expect(readerKeyboardAction("-", { metaKey: true })).toBeNull();
+    expect(readerKeyboardAction("+", { ctrlKey: true })).toBeNull();
+  });
+
+  test("recognizes only unmodified reader navigation shortcuts", () => {
+    expect(readerKeyboardAction("Escape", {})).toBe("close-sidebar");
+    expect(readerKeyboardAction("j", {})).toBe("j");
+    expect(readerKeyboardAction("d", {})).toBe("d");
+    expect(readerKeyboardAction("j", { metaKey: true })).toBeNull();
+    expect(readerKeyboardAction("d", { altKey: true })).toBeNull();
   });
 });
