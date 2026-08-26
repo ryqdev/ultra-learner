@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CHAT_PROXY_PATH,
   chatCompletionsUrl,
+  createChatProxyRequest,
   createChatRequest,
   normalizeBaseUrl,
+  parseChatProxyPayload,
   requestChatCompletion,
   validateChatConfig,
 } from "../src/lib/chat.ts";
@@ -40,8 +43,55 @@ describe("chat configuration and request helpers", () => {
       [{ role: "user", content: "hello" }],
       undefined,
       async () => new Response(JSON.stringify({ choices: [{ message: { content: "  hi there  " } }] }), { status: 200 }),
+      { transport: "direct" },
     );
     expect(answer).toBe("hi there");
+  });
+
+  test("builds the same-origin proxy request and reports transport failures clearly", async () => {
+    const request = createChatProxyRequest(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      [{ role: "user", content: "hello" }],
+    );
+    expect(request.url).toBe(CHAT_PROXY_PATH);
+    expect(request.headers).toEqual({ Authorization: "Bearer secret", "Content-Type": "application/json" });
+    expect(JSON.parse(String(request.body))).toEqual({
+      baseUrl: "https://gateway.example/v1",
+      model: "study-model",
+      messages: [{ role: "user", content: "hello" }],
+    });
+
+    await expect(requestChatCompletion(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      [{ role: "user", content: "hello" }],
+      undefined,
+      async () => { throw new TypeError("Failed to fetch"); },
+      { transport: "proxy" },
+    )).rejects.toThrow("local chat proxy");
+
+    await expect(requestChatCompletion(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      [{ role: "user", content: "hello" }],
+      undefined,
+      async () => { throw new TypeError("Failed to fetch"); },
+      { transport: "direct" },
+    )).rejects.toThrow("gateway.example");
+  });
+
+  test("validates untrusted proxy payloads before forwarding them", () => {
+    expect(parseChatProxyPayload({
+      baseUrl: " https://gateway.example/v1/ ",
+      model: " study-model ",
+      messages: [{ role: "user", content: "hello" }],
+    })).toEqual({
+      baseUrl: "https://gateway.example/v1",
+      model: "study-model",
+      messages: [{ role: "user", content: "hello" }],
+    });
+    expect(() => parseChatProxyPayload({ baseUrl: "file:///tmp/model", model: "m", messages: [] }))
+      .toThrow("HTTP or HTTPS");
+    expect(() => parseChatProxyPayload({ baseUrl: "https://gateway.example", model: "m", messages: [] }))
+      .toThrow("At least one chat message");
   });
 });
 

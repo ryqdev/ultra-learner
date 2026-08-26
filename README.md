@@ -31,7 +31,8 @@ bun run dev
 - Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
 - Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A selectable PDF.js text layer, box selection mode, and a synchronized AI study companion panel.
-- Session-only provider settings for API key, Base URL, and model; credentials are never sent to the Bun server.
+- Session-only provider settings for API key, Base URL, and model. Chat calls go through the same-origin Bun proxy so providers do not need browser CORS support; the key is held in tab memory and forwarded only for the current request.
+- A New session action in the reader starts a fresh AI conversation for the currently open PDF while keeping the document and provider settings in place.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.
 
