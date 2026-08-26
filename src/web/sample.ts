@@ -128,9 +128,9 @@ function pageStream(page: PdfPageContent, pageNumber: number): string {
 
 export function createSamplePdf(): Uint8Array {
   const objects: string[] = [];
-  const pageObjectNumbers = pages.map((_, index) => 6 + index * 2);
+  const pageObjectNumbers = pages.map((_, index) => 6 + index * 3);
 
-  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(next-section) [9 0 R /Fit]] >> >> >>";
   objects[2] = `<< /Type /Pages /Kids [${pageObjectNumbers.map((number) => `${number} 0 R`).join(" ")}] /Count ${pages.length} >>`;
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
   objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>";
@@ -139,10 +139,14 @@ export function createSamplePdf(): Uint8Array {
   pages.forEach((page, index) => {
     const pageObject = pageObjectNumbers[index]!;
     const contentObject = pageObject + 1;
+    const annotationObject = pageObject + 2;
     const stream = pageStream(page, index + 1);
     const streamLength = encoder.encode(stream).byteLength;
-    objects[pageObject] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${contentObject} 0 R >>`;
+    const target = index === pages.length - 1 ? pageObjectNumbers[0]! : pageObjectNumbers[index + 1]!;
+    const destination = index === 0 ? "(next-section)" : `[${target} 0 R /Fit]`;
+    objects[pageObject] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Annots [${annotationObject} 0 R] /Contents ${contentObject} 0 R >>`;
     objects[contentObject] = `<< /Length ${streamLength} >>\nstream\n${stream}\nendstream`;
+    objects[annotationObject] = `<< /Type /Annot /Subtype /Link /Rect [45 30 567 78] /Border [0 0 0] /Dest ${destination} >>`;
   });
 
   let pdf = "%PDF-1.7\n% ultra-learner\n";

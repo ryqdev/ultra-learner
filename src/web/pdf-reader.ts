@@ -1,4 +1,6 @@
 import {
+  AnnotationLayer,
+  AnnotationMode,
   GlobalWorkerOptions,
   getDocument,
   TextLayer,
@@ -22,6 +24,8 @@ import {
   zoomLabel,
 } from "../lib/reader.ts";
 import { createSelectionContext, type SelectionContext, type SelectionSource } from "../lib/selection.ts";
+import { ReaderPdfDownloadManager } from "./pdf-download-manager.ts";
+import { ReaderPdfLinkService } from "./pdf-link-service.ts";
 
 GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.mjs";
 
@@ -36,6 +40,7 @@ export interface PdfReaderElements {
   pageSurface: HTMLElement;
   canvas: HTMLCanvasElement;
   textLayer: HTMLElement;
+  annotationLayer: HTMLDivElement;
   boxSelection: HTMLElement;
   thumbnailList: HTMLElement;
   documentTitle: HTMLElement;
@@ -72,8 +77,20 @@ interface ReaderState {
   fitScale: number;
   renderTask: RenderTask | null;
   textLayer: TextLayer | null;
+  annotationLayer: AnnotationLayer | null;
+  annotationCanvasMap: Map<string, HTMLCanvasElement> | null;
+  optionalContentConfigPromise: ReturnType<PDFDocumentProxy["getOptionalContentConfig"]> | null;
   renderVersion: number;
   selectionMode: SelectionSource;
+}
+
+interface PdfDestinationKind {
+  name?: string;
+}
+
+interface PdfDestinationLocation {
+  x: number | null;
+  y: number | null;
 }
 
 function isRenderingCancelled(error: unknown): boolean {
@@ -95,6 +112,9 @@ export class PdfReaderController {
     fitScale: 1,
     renderTask: null,
     textLayer: null,
+    annotationLayer: null,
+    annotationCanvasMap: null,
+    optionalContentConfigPromise: null,
     renderVersion: 0,
     selectionMode: "text",
   };
@@ -102,11 +122,14 @@ export class PdfReaderController {
   private resizeTimer: number | undefined;
   private boxStart: { x: number; y: number } | null = null;
   private openFileVersion = 0;
+  private readonly linkService: ReaderPdfLinkService;
+  private readonly downloadManager = new ReaderPdfDownloadManager();
 
   public constructor(
     private readonly elements: PdfReaderElements,
     private readonly callbacks: PdfReaderCallbacks,
   ) {
+    this.linkService = new ReaderPdfLinkService(this, callbacks.onToast);
     this.bindEvents();
     this.setControlsLoading();
   }
@@ -134,6 +157,7 @@ export class PdfReaderController {
     this.state.selectionMode = "text";
     this.elements.pageSurface.classList.remove("is-box-selecting");
     this.elements.textLayer.classList.remove("is-box-selecting");
+    this.elements.annotationLayer.classList.remove("is-box-selecting");
     this.elements.textLayer.setAttribute("aria-label", "Select PDF text");
     this.elements.thumbnailList.replaceChildren();
     this.elements.canvas.width = 0;
@@ -141,6 +165,7 @@ export class PdfReaderController {
     this.elements.canvas.style.width = "";
     this.elements.canvas.style.height = "";
     this.elements.textLayer.replaceChildren();
+    this.elements.annotationLayer.replaceChildren();
     this.elements.pageSurface.style.width = "";
     this.elements.pageSurface.style.height = "";
     this.elements.documentTitle.textContent = "Document";
@@ -188,11 +213,13 @@ export class PdfReaderController {
       }
 
       this.state.document = pdf;
+      this.linkService.setDocument(pdf);
       this.state.loadingTask = loadingTask;
       this.state.filename = filename;
       this.state.fileSize = fileSize;
       this.state.page = 1;
       this.state.zoom = 1;
+      this.state.optionalContentConfigPromise = pdf.getOptionalContentConfig({ intent: "display" });
       this.elements.documentTitle.textContent = documentTitle(filename);
       this.elements.documentMeta.textContent = `${pdf.numPages} ${pdf.numPages === 1 ? "page" : "pages"} · ${formatFileSize(fileSize)} · Local only`;
       this.elements.pageCount.textContent = String(pdf.numPages);
@@ -216,6 +243,29 @@ export class PdfReaderController {
     }
     this.state.page = nextPage;
     this.clearSelection();
+    await this.renderCurrentPage();
+  }
+
+  public async goToDestination(page: number, explicitDestination: readonly unknown[]): Promise<void> {
+    const nextPage = clampPage(page, this.pageCount);
+    const location = this.destinationLocation(explicitDestination);
+    if (nextPage === this.state.page) {
+      this.scrollToDestination(location);
+      return;
+    }
+    await this.goToPage(nextPage);
+    if (this.state.page !== nextPage) return;
+    this.scrollToDestination(location);
+  }
+
+  public async setOptionalContentState(action: unknown): Promise<void> {
+    const pdf = this.state.document;
+    if (!pdf) return;
+    const configuration = await (this.state.optionalContentConfigPromise
+      ?? pdf.getOptionalContentConfig({ intent: "display" }));
+    if (pdf !== this.state.document) return;
+    configuration.setOCGState(action as Parameters<typeof configuration.setOCGState>[0]);
+    this.state.optionalContentConfigPromise = Promise.resolve(configuration);
     await this.renderCurrentPage();
   }
 
@@ -253,6 +303,7 @@ export class PdfReaderController {
     this.state.selectionMode = mode;
     this.elements.pageSurface.classList.toggle("is-box-selecting", mode === "box");
     this.elements.textLayer.classList.toggle("is-box-selecting", mode === "box");
+    this.elements.annotationLayer.classList.toggle("is-box-selecting", mode === "box");
     this.elements.textLayer.setAttribute("aria-label", mode === "box" ? "Draw a box around PDF text" : "Select PDF text");
     if (mode === "box") this.clearSelection();
   }
@@ -442,15 +493,21 @@ export class PdfReaderController {
   private cancelCurrentWork(): void {
     this.state.renderTask?.cancel();
     this.state.textLayer?.cancel();
+    this.state.annotationLayer?.destroy();
     void this.state.loadingTask?.destroy();
+    this.linkService.setDocument(null);
     this.state.document = null;
     this.state.loadingTask = null;
     this.state.renderTask = null;
     this.state.textLayer = null;
+    this.state.annotationLayer = null;
+    this.state.annotationCanvasMap = null;
+    this.state.optionalContentConfigPromise = null;
     this.elements.thumbnailList.replaceChildren();
     this.elements.canvas.width = 0;
     this.elements.canvas.height = 0;
     this.elements.textLayer.replaceChildren();
+    this.elements.annotationLayer.replaceChildren();
     this.state.renderVersion += 1;
     this.callbacks.onSelection(null);
   }
@@ -493,6 +550,56 @@ export class PdfReaderController {
     return Math.min(stageWidth / naturalViewport.width, stageHeight / naturalViewport.height, 1.45);
   }
 
+  private destinationLocation(destination: readonly unknown[]): PdfDestinationLocation | null {
+    const kind = destination[1] as PdfDestinationKind | undefined;
+    switch (kind?.name) {
+      case "XYZ":
+        return {
+          x: typeof destination[2] === "number" ? destination[2] : 0,
+          y: typeof destination[3] === "number" ? destination[3] : null,
+        };
+      case "FitH":
+      case "FitBH":
+        return {
+          x: 0,
+          y: typeof destination[2] === "number" ? destination[2] : null,
+        };
+      case "FitV":
+      case "FitBV":
+        return {
+          x: typeof destination[2] === "number" ? destination[2] : 0,
+          y: null,
+        };
+      case "FitR":
+        return {
+          x: typeof destination[2] === "number" ? destination[2] : 0,
+          y: typeof destination[5] === "number" ? destination[5] : null,
+        };
+      default:
+        return null;
+    }
+  }
+
+  private scrollToDestination(location: PdfDestinationLocation | null): void {
+    if (!location) {
+      this.elements.readerStage.scrollTo({ top: 0, left: 0 });
+      return;
+    }
+    const scale = this.state.fitScale * this.state.zoom;
+    const pdf = this.state.document;
+    const destinationPage = this.state.page;
+    void pdf?.getPage(destinationPage).then((page) => {
+      if (pdf !== this.state.document || destinationPage !== this.state.page) return;
+      const viewport = page.getViewport({ scale });
+      const y = location.y ?? page.view[3]!;
+      const [left, top] = viewport.convertToViewportPoint(location.x ?? 0, y);
+      this.elements.readerStage.scrollTo({
+        left: Math.max(0, left + this.elements.canvasFrame.offsetLeft),
+        top: Math.max(0, top + this.elements.canvasFrame.offsetTop),
+      });
+    });
+  }
+
   private async renderCurrentPage(recalculateFit = false): Promise<void> {
     const pdf = this.state.document;
     if (!pdf) return;
@@ -500,6 +607,9 @@ export class PdfReaderController {
     const renderVersion = ++this.state.renderVersion;
     this.state.renderTask?.cancel();
     this.state.textLayer?.cancel();
+    this.state.annotationLayer?.destroy();
+    this.state.annotationLayer = null;
+    this.state.annotationCanvasMap = null;
     this.setLoading(`Rendering page ${this.state.page}…`);
 
     try {
@@ -522,10 +632,20 @@ export class PdfReaderController {
       this.elements.textLayer.style.height = `${height}px`;
       this.elements.textLayer.style.setProperty("--total-scale-factor", String(scale));
       this.elements.textLayer.replaceChildren();
+      this.elements.pageSurface.style.setProperty("--total-scale-factor", String(scale));
+      this.elements.pageSurface.style.setProperty("--scale-round-x", "1px");
+      this.elements.pageSurface.style.setProperty("--scale-round-y", "1px");
+      this.elements.annotationLayer.replaceChildren();
+
+      const annotationCanvasMap = new Map<string, HTMLCanvasElement>();
+      this.state.annotationCanvasMap = annotationCanvasMap;
 
       const renderTask = page.render({
         canvas: this.elements.canvas,
         viewport,
+        annotationMode: AnnotationMode.ENABLE_FORMS,
+        annotationCanvasMap,
+        optionalContentConfigPromise: this.state.optionalContentConfigPromise ?? undefined,
         transform: deviceScale === 1 ? undefined : [deviceScale, 0, 0, deviceScale, 0, 0],
         background: "rgb(255, 255, 255)",
       });
@@ -536,8 +656,56 @@ export class PdfReaderController {
         this.state.textLayer = textLayer;
         return textLayer.render();
       });
+      const annotationsPromise = page.getAnnotations({ intent: "display" });
       await Promise.all([renderTask.promise, textLayerPromise]);
       if (renderVersion !== this.state.renderVersion) return;
+
+      const [annotations, optionalContentConfig] = await Promise.all([
+        annotationsPromise,
+        this.state.optionalContentConfigPromise,
+      ]);
+      if (renderVersion !== this.state.renderVersion) return;
+      const annotationViewport = viewport.clone({ dontFlip: true });
+      const annotationLayerElement = document.createElement("div");
+      annotationLayerElement.id = "annotation-layer";
+      annotationLayerElement.className = "annotationLayer";
+      annotationLayerElement.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
+      annotationLayerElement.setAttribute("aria-label", "PDF links and annotations");
+      const annotationLayer = new AnnotationLayer({
+        div: annotationLayerElement,
+        accessibilityManager: null,
+        annotationEditorUIManager: null,
+        page,
+        viewport: annotationViewport,
+        structTreeLayer: null,
+        commentManager: null,
+        linkService: this.linkService,
+        annotationStorage: pdf.annotationStorage,
+        annotationCanvasMap,
+      });
+      await annotationLayer.render({
+        viewport: annotationViewport,
+        div: annotationLayerElement,
+        annotations,
+        page,
+        linkService: this.linkService as never,
+        downloadManager: this.downloadManager as never,
+        annotationStorage: pdf.annotationStorage,
+        imageResourcesPath: "/assets/images/",
+        renderForms: true,
+        enableScripting: false,
+        hasJSActions: false,
+        fieldObjects: null,
+        annotationCanvasMap,
+        optionalContentConfig: optionalContentConfig ?? undefined,
+      });
+      if (renderVersion !== this.state.renderVersion) {
+        annotationLayer.destroy();
+        return;
+      }
+      this.elements.annotationLayer.replaceWith(annotationLayerElement);
+      this.elements.annotationLayer = annotationLayerElement;
+      this.state.annotationLayer = annotationLayer;
 
       this.elements.readerLoading.hidden = true;
       this.elements.readerError.hidden = true;
