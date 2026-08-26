@@ -192,10 +192,6 @@
                 </button>
                 <button class="fit-button" id="fit-button" type="button" title="Fit page to view">Fit page</button>
               </div>
-              <div class="reading-progress" aria-label="Reading progress">
-                <span id="progress-label">0% read</span>
-                <i><b id="progress-bar"></b></i>
-              </div>
               <div class="selection-controls" aria-label="Selection mode">
                 <span class="selection-mode-label">Share</span>
                 <button class="selection-mode-button is-active" id="text-select-mode" type="button" aria-pressed="true" title="Select text from the PDF">
@@ -207,7 +203,13 @@
                   Box
                 </button>
               </div>
-              <span class="keyboard-hint" aria-label="Keyboard shortcuts">j/k scroll · d/u page</span>
+              <div class="toolbar-status">
+                <span class="keyboard-hint" aria-label="Keyboard shortcuts">j/k scroll · d/u page</span>
+                <div class="reading-progress" aria-label="Reading progress">
+                  <span id="progress-label">0% read</span>
+                  <i><b id="progress-bar"></b></i>
+                </div>
+              </div>
             </div>
           </div>
 
