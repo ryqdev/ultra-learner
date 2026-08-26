@@ -3,7 +3,7 @@
 Ultra Learner is a single-process Bun web application with browser-owned PDF rendering and server-owned local session persistence.
 
 ```text
-PDF chosen on device ──→ browser memory ──→ PDF.js worker ──→ canvas + text layer
+PDF chosen on device ──→ browser memory ──→ PDF.js worker ──→ canvas + text + annotation layers
            │                    ↑                    ↓
            └─→ local session API│           reader controls ← page/zoom state
                         │       │
@@ -19,7 +19,7 @@ Bun server ──→ HTML and CSS
 
 ## Browser application
 
-`src/web/app.ts` is the composition root for the browser UI. `src/web/pdf-reader.ts` owns PDF.js loading, canvas rendering, the selectable text layer, thumbnails, page/zoom controls, and text/box selection events. `src/web/session-history.ts` owns the browser side of the local session API and history metadata formatting. `src/web/chat-panel.ts` owns the provider form, in-memory conversation, and chat composer. `src/lib/selection.ts` defines the small selection-context contract shared by the reader and chat modules, while `src/lib/chat.ts` validates provider settings, validates proxy payloads, and builds/executes OpenAI-compatible requests. Page number, zoom, fit scale, AI guide width, active render work, provider credentials, and messages remain ephemeral; only uploaded PDF bytes and immutable identifying metadata persist.
+`src/web/app.ts` is the composition root for the browser UI. `src/web/pdf-reader.ts` owns PDF.js loading, canvas rendering, selectable text and annotation layers, thumbnails, page/zoom controls, and text/box selection events. `src/web/pdf-link-service.ts` adapts PDF destinations and named page actions to the reader's one-page rendering model, while external URLs open in a separate tab and embedded attachments use a local blob download. `src/web/session-history.ts` owns the browser side of the local session API and history metadata formatting. `src/web/chat-panel.ts` owns the provider form, in-memory conversation, and chat composer. `src/lib/selection.ts` defines the small selection-context contract shared by the reader and chat modules, while `src/lib/chat.ts` validates provider settings, proxy payloads, and OpenAI-compatible requests. Page number, zoom, fit scale, AI guide width, active render work, form values, provider credentials, and messages remain ephemeral; only uploaded PDF bytes and immutable identifying metadata persist.`
 
 The reader validates the selected file before reading it. PDF.js parses a copy in browser memory; after parsing succeeds, the original bytes are posted to the same-origin session API for local persistence. No account or cloud service is involved, and the server binds to loopback by default. Text PDFs receive a PDF.js `TextLayer` positioned over the canvas, so browser selection and copying use the source text without changing the visual page. Image-only pages continue to render through the canvas but do not produce text selection context.
 
@@ -29,11 +29,13 @@ The reader toolbar's `New session` action clears the chat messages, selection, a
 
 The PDF page surface has two selection modes. Text mode uses PDF.js's transparent positioned text layer for native browser selection. Box mode captures a pointer rectangle and collects intersecting text runs from that same layer. Both modes emit the same `SelectionContext`, so the chat panel does not depend on PDF.js or DOM details.
 
+PDF.js's `AnnotationLayer` is rendered above the selectable text using the same page viewport. It preserves authored link rectangles, interactive form controls, popup annotations, attachment actions, and optional-content actions. Named and explicit destinations resolve through the browser-owned `PDFDocumentProxy`; the reader changes its current page and applies destination coordinates after rendering. Box selection temporarily disables annotation hit targets so drawing a selection remains deterministic.
+
 On desktop, the separator on the AI guide's left edge adjusts its grid track with pointer dragging or the arrow keys. The width is bounded to keep both the guide and main reading surface usable, and fitting is recalculated after the layout changes. Compact screens keep the guide as a fixed-width overlay instead of exposing the resize interaction.
 
 The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage. The toolbar exposes the current page and total page count through a numeric jump field. When the reader has focus, `j` and `k` move the stage by a small fixed increment and change to the next or previous page when the matching scroll edge has been reached; `d` and `u` change pages directly. Form fields retain their normal typing behavior.
 
-`src/web/sample.ts` creates a small valid PDF in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering path rather than a separate mock screen.
+`src/web/sample.ts` creates a small valid PDF with internal links in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering and destination path rather than a separate mock screen.
 
 `src/lib/` contains deterministic validation and reader-state helpers. These functions have no DOM or PDF.js dependency and carry the fine-grained behavior tests.
 
@@ -53,7 +55,7 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 
 ## Verification boundaries
 
-- Unit tests cover PDF file recognition, display metadata, page constraints, zoom constraints, progress calculations, selection normalization, and OpenAI-compatible request behavior.
+- Unit tests cover PDF file recognition, display metadata, page constraints, destination resolution, named actions, zoom constraints, progress calculations, selection normalization, and OpenAI-compatible request behavior.
 - Session tests cover metadata validation, filesystem layout, ordering, corrupt-entry handling, upload transport, and history formatting.
 - The merged reader behavior also covers Vim navigation deltas through the reader-state helpers.
 - HTTP tests cover the application shell, browser bundle, health endpoint, session creation/list/retrieval, method boundaries, and static-file containment.

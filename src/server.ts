@@ -23,11 +23,13 @@ export interface AppServerOptions {
 
 const contentTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
   ".html": "text/html; charset=utf-8",
   ".icc": "application/vnd.iccprofile",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
   ".pdf": "application/pdf",
+  ".svg": "image/svg+xml",
   ".ttf": "font/ttf",
   ".wasm": "application/wasm",
   ".woff": "font/woff",
@@ -328,9 +330,14 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
         return responseForFile(join(root, "node_modules", "pdfjs-dist", "build", "pdf.worker.min.mjs"));
       }
 
+      if (url.pathname === "/assets/pdf_viewer.css") {
+        return responseForFile(join(root, "node_modules", "pdfjs-dist", "web", "pdf_viewer.css"));
+      }
+
       const pdfAssetDirectories: Record<string, string> = {
         "/assets/cmaps/": "cmaps",
         "/assets/iccs/": "iccs",
+        "/assets/images/": "web/images",
         "/assets/standard_fonts/": "standard_fonts",
         "/assets/wasm/": "wasm",
       };

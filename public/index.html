@@ -9,6 +9,7 @@
       content="A calm, local-first PDF reader for focused learning."
     />
     <title>Ultra Learner — PDF Reader</title>
+    <link rel="stylesheet" href="/assets/pdf_viewer.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -154,6 +155,7 @@
                 <div class="page-surface" id="page-surface">
                   <canvas id="pdf-canvas" aria-label="Current PDF page"></canvas>
                   <div class="text-layer" id="text-layer" aria-label="Selectable PDF text"></div>
+                  <div class="annotationLayer" id="annotation-layer" aria-label="PDF links and annotations"></div>
                   <div class="box-selection" id="box-selection" hidden aria-hidden="true"></div>
                 </div>
               </div>
