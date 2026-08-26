@@ -9,6 +9,7 @@ import {
   MIN_READER_MAIN_WIDTH,
   clampChatPanelWidth,
 } from "../lib/layout.ts";
+import { readerKeyboardAction } from "../lib/reader.ts";
 import type { SelectionSource } from "../lib/selection.ts";
 
 const appShell = requiredElement("app-shell");
@@ -271,26 +272,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (!reader.documentLoaded || isEditableTarget(event.target) || event.altKey) return;
-  if (event.key === "Escape") {
+  if (!reader.documentLoaded || isEditableTarget(event.target)) return;
+  const action = readerKeyboardAction(event.key, event);
+  if (action === "close-sidebar") {
     reader.closeSidebar();
     refreshReaderLayout();
     return;
   }
-  if ((event.metaKey || event.ctrlKey) && (event.key === "+" || event.key === "=")) {
-    event.preventDefault();
-    void reader.changeZoom(1);
-  }
-  if ((event.metaKey || event.ctrlKey) && event.key === "-") {
-    event.preventDefault();
-    void reader.changeZoom(-1);
-    return;
-  }
-  if (event.metaKey || event.ctrlKey) return;
-  if (event.key === "j" || event.key === "k" || event.key === "d" || event.key === "u") {
-    event.preventDefault();
-    reader.vimNavigate(event.key);
-  }
+  if (!action) return;
+  event.preventDefault();
+  reader.vimNavigate(action);
 });
 
 window.addEventListener("resize", () => window.requestAnimationFrame(fitChatPanelWidth));
