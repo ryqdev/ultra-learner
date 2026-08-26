@@ -24,6 +24,8 @@ The chat panel sends only the user prompt and an explicitly selected, normalized
 
 The PDF page surface has two selection modes. Text mode uses PDF.js's transparent positioned text layer for native browser selection. Box mode captures a pointer rectangle and collects intersecting text runs from that same layer. Both modes emit the same `SelectionContext`, so the chat panel does not depend on PDF.js or DOM details.
 
+The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage. The toolbar exposes the current page and total page count through a numeric jump field. When the reader has focus, `j` and `k` move the stage by a small fixed increment and `d` and `u` change pages; form fields retain their normal typing behavior.
+
 `src/web/sample.ts` creates a small valid PDF in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering path rather than a separate mock screen.
 
 `src/lib/` contains deterministic validation and reader-state helpers. These functions have no DOM or PDF.js dependency and carry the fine-grained behavior tests.
@@ -43,6 +45,7 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 ## Verification boundaries
 
 - Unit tests cover PDF file recognition, display metadata, page constraints, zoom constraints, progress calculations, selection normalization, and OpenAI-compatible request behavior.
+- The merged reader behavior also covers Vim navigation deltas through the reader-state helpers.
 - HTTP tests cover the application shell, browser bundle, health endpoint, method boundary, and static-file containment.
 - `bun run typecheck` covers server, browser, test, and repository-script TypeScript.
 - Browser verification exercises the generated sample through the real PDF worker, canvas renderer, and responsive UI.
