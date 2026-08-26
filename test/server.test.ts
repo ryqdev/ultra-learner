@@ -37,6 +37,8 @@ describe("web server", () => {
     expect(page).toContain('id="text-layer"');
     expect(page).toContain('id="history-list"');
     expect(page).toContain("~/.ultra-learner");
+    expect(page).toContain('id="annotation-layer"');
+    expect(page).toContain('/assets/pdf_viewer.css');
 
     const healthResponse = await fetch(new URL("/health", server.url));
     expect(await healthResponse.json()).toEqual({ status: "ok" });
@@ -70,6 +72,14 @@ describe("web server", () => {
     const wasmResponse = await fetch(new URL("/assets/wasm/openjpeg.wasm", server.url));
     expect(wasmResponse.status).toBe(200);
     expect(wasmResponse.headers.get("content-type")).toBe("application/wasm");
+
+    const viewerStylesResponse = await fetch(new URL("/assets/pdf_viewer.css", server.url));
+    expect(viewerStylesResponse.status).toBe(200);
+    expect(viewerStylesResponse.headers.get("content-type")).toContain("text/css");
+
+    const annotationIconResponse = await fetch(new URL("/assets/images/annotation-note.svg", server.url));
+    expect(annotationIconResponse.status).toBe(200);
+    expect(annotationIconResponse.headers.get("content-type")).toBe("image/svg+xml");
   });
 
   test("persists uploaded PDFs as sessions and serves their history", async () => {

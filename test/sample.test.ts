@@ -12,11 +12,21 @@ test("creates a parseable, self-contained four-page PDF sample", async () => {
   expect(source).toContain("/Count 4");
   expect(source).toContain("(The shape)");
   expect(source).toContain("(of attention)");
+  expect(source).toContain("/Subtype /Link");
+  expect(source).toContain("(next-section)");
   expect(source.endsWith("%%EOF\n")).toBe(true);
 
   const loadingTask = getDocument({ data: sample, disableFontFace: true });
   const document = await loadingTask.promise;
   expect(document.numPages).toBe(4);
-  expect((await document.getPage(1)).getViewport({ scale: 1 }).width).toBe(612);
+  const firstPage = await document.getPage(1);
+  expect(firstPage.getViewport({ scale: 1 }).width).toBe(612);
+  expect(await firstPage.getAnnotations()).toEqual([
+    expect.objectContaining({ annotationType: 2, dest: "next-section" }),
+  ]);
+  expect(await document.getDestination("next-section")).toEqual([
+    expect.objectContaining({ num: 9, gen: 0 }),
+    expect.objectContaining({ name: "Fit" }),
+  ]);
   await loadingTask.destroy();
 });

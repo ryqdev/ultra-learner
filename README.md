@@ -28,11 +28,12 @@ bun run dev
 - Browser-owned PDF parsing and rendering; the Bun server only receives uploaded bytes to persist them on the same device.
 - Scrollable page thumbnails, previous/next controls, direct page entry with a visible page count, reading progress, and Vim-friendly keyboard navigation (`j`/`k` scroll and turn the page at the matching edge, `d`/`u` page).
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.
+- Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
 - Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A selectable PDF.js text layer, box selection mode, and a synchronized AI study companion panel.
 - Session-only provider settings for API key, Base URL, and model; credentials are never sent to the Bun server.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
-- A generated sample PDF that exercises the same reader path as uploaded documents.
+- A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.
 
 ## Commands
 
