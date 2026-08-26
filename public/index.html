@@ -132,6 +132,7 @@
               </div>
               <div class="canvas-frame" id="canvas-frame" hidden>
                 <canvas id="pdf-canvas" aria-label="Current PDF page"></canvas>
+                <div class="text-layer" id="text-layer" aria-label="Selectable PDF text"></div>
               </div>
               <div class="reader-error" id="reader-error" role="alert" hidden>
                 <div class="error-icon">!</div>
@@ -147,8 +148,8 @@
                   <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 4.5-5 5.5 5 5.5"/></svg>
                 </button>
                 <label class="page-input-wrap">
-                  <span class="sr-only">Current page</span>
-                  <input id="page-input" type="number" inputmode="numeric" min="1" value="1" />
+                  <span class="sr-only">Current page number</span>
+                  <input id="page-input" type="number" inputmode="numeric" min="1" value="1" aria-label="Current page number" title="Jump to page" />
                 </label>
                 <span class="page-total">of <strong id="page-count">1</strong></span>
                 <button class="tool-button" id="next-page" type="button" aria-label="Next page" title="Next page">
@@ -170,6 +171,7 @@
                 <span id="progress-label">0% read</span>
                 <i><b id="progress-bar"></b></i>
               </div>
+              <span class="keyboard-hint" aria-label="Keyboard shortcuts">j/k scroll · d/u page</span>
             </div>
           </div>
         </section>

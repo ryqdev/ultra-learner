@@ -25,7 +25,8 @@ bun run dev
 
 - Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
 - Browser-only PDF parsing; selected documents are not posted to the Bun server.
-- Page thumbnails, previous/next controls, direct page entry, reading progress, and keyboard navigation.
+- Scrollable page thumbnails, previous/next controls, direct page entry with a visible page count, reading progress, and Vim-friendly keyboard navigation (`j`/`k` scroll, `d`/`u` page).
+- Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.
 - Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF that exercises the same reader path as uploaded documents.

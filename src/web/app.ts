@@ -1,6 +1,7 @@
 import {
   GlobalWorkerOptions,
   getDocument,
+  TextLayer,
   type OnProgressParameters,
   type PDFDocumentProxy,
   type PDFDocumentLoadingTask,
@@ -9,7 +10,16 @@ import {
 } from "pdfjs-dist";
 
 import { documentTitle, formatFileSize, isPdfFile } from "../lib/files.ts";
-import { MAX_ZOOM, MIN_ZOOM, clampPage, nextZoom, readingProgress, zoomLabel } from "../lib/reader.ts";
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  clampPage,
+  nextZoom,
+  readingProgress,
+  vimPageDelta,
+  vimScrollDelta,
+  zoomLabel,
+} from "../lib/reader.ts";
 import { createSamplePdf } from "./sample.ts";
 
 GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.mjs";
@@ -23,6 +33,7 @@ interface ReaderState {
   zoom: number;
   fitScale: number;
   renderTask: RenderTask | null;
+  textLayer: TextLayer | null;
   renderVersion: number;
 }
 
@@ -36,6 +47,7 @@ const state: ReaderState = {
   zoom: 1,
   fitScale: 1,
   renderTask: null,
+  textLayer: null,
   renderVersion: 0,
 };
 
@@ -66,6 +78,7 @@ const readerError = requiredElement("reader-error");
 const errorMessage = requiredElement("error-message");
 const canvasFrame = requiredElement("canvas-frame");
 const canvas = requiredElement<HTMLCanvasElement>("pdf-canvas");
+const textLayerElement = requiredElement("text-layer");
 const documentTitleElement = requiredElement("document-title");
 const documentMeta = requiredElement("document-meta");
 const previousPageButton = requiredElement<HTMLButtonElement>("previous-page");
@@ -94,6 +107,8 @@ function showToast(message: string): void {
 
 function showWelcome(): void {
   state.renderTask?.cancel();
+  state.textLayer?.cancel();
+  state.textLayer = null;
   void state.loadingTask?.destroy();
   state.document = null;
   state.loadingTask = null;
@@ -102,6 +117,7 @@ function showWelcome(): void {
   state.fitScale = 1;
   state.renderVersion += 1;
   thumbnailList.replaceChildren();
+  textLayerElement.replaceChildren();
   canvas.width = 0;
   canvas.height = 0;
   fileInput.value = "";
@@ -160,6 +176,8 @@ async function loadPdf(data: Uint8Array, filename: string, fileSize: number): Pr
   documentTitleElement.textContent = documentTitle(filename);
   documentMeta.textContent = `${formatFileSize(fileSize)} · Validating PDF…`;
   state.renderTask?.cancel();
+  state.textLayer?.cancel();
+  state.textLayer = null;
   await state.loadingTask?.destroy();
   state.document = null;
   state.loadingTask = null;
@@ -242,6 +260,9 @@ async function renderCurrentPage(recalculateFit = false): Promise<void> {
 
   const renderVersion = ++state.renderVersion;
   state.renderTask?.cancel();
+  state.textLayer?.cancel();
+  state.textLayer = null;
+  textLayerElement.replaceChildren();
   setLoading(`Rendering page ${state.page}…`);
 
   try {
@@ -256,6 +277,7 @@ async function renderCurrentPage(recalculateFit = false): Promise<void> {
     canvas.height = Math.floor(viewport.height * deviceScale);
     canvas.style.width = `${Math.floor(viewport.width)}px`;
     canvas.style.height = `${Math.floor(viewport.height)}px`;
+    textLayerElement.style.setProperty("--total-scale-factor", String(scale));
 
     state.renderTask = page.render({
       canvas,
@@ -263,7 +285,16 @@ async function renderCurrentPage(recalculateFit = false): Promise<void> {
       transform: deviceScale === 1 ? undefined : [deviceScale, 0, 0, deviceScale, 0, 0],
       background: "rgb(255, 255, 255)",
     });
-    await state.renderTask.promise;
+    const textLayer = new TextLayer({
+      textContentSource: page.streamTextContent(),
+      container: textLayerElement,
+      viewport,
+    });
+    state.textLayer = textLayer;
+    textLayerElement.style.width = `${Math.floor(viewport.width)}px`;
+    textLayerElement.style.height = `${Math.floor(viewport.height)}px`;
+    const textLayerPromise = textLayer.render().catch(() => undefined);
+    await Promise.all([state.renderTask.promise, textLayerPromise]);
     if (renderVersion !== state.renderVersion) return;
 
     readerLoading.hidden = true;
@@ -428,7 +459,14 @@ themeButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (!state.document || event.target instanceof HTMLInputElement) return;
+  if (
+    !state.document
+    || event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement
+    || (event.target instanceof HTMLElement && event.target.isContentEditable)
+    || event.altKey
+  ) return;
   if (event.key === "ArrowLeft" || event.key === "PageUp") {
     event.preventDefault();
     void goToPage(state.page - 1);
@@ -444,6 +482,18 @@ window.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key === "-") {
     event.preventDefault();
     void changeZoom(-1);
+    return;
+  }
+  if (event.metaKey || event.ctrlKey) return;
+  if (event.key === "j" || event.key === "k") {
+    event.preventDefault();
+    readerStage.scrollBy({ top: vimScrollDelta(event.key), behavior: "auto" });
+    return;
+  }
+  if (event.key === "d" || event.key === "u") {
+    event.preventDefault();
+    void goToPage(state.page + vimPageDelta(event.key));
+    return;
   }
   if (event.key === "Escape") readerView.classList.add("sidebar-hidden");
 });

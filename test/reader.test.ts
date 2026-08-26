@@ -7,6 +7,9 @@ import {
   clampZoom,
   nextZoom,
   readingProgress,
+  VIM_SCROLL_STEP,
+  vimPageDelta,
+  vimScrollDelta,
   zoomLabel,
 } from "../src/lib/reader.ts";
 
@@ -32,5 +35,12 @@ describe("reader state helpers", () => {
     expect(readingProgress(3, 4)).toBe(75);
     expect(readingProgress(8, 4)).toBe(100);
     expect(readingProgress(1, 0)).toBe(0);
+  });
+
+  test("maps Vim navigation keys to predictable movements", () => {
+    expect(vimScrollDelta("j")).toBe(VIM_SCROLL_STEP);
+    expect(vimScrollDelta("k")).toBe(-VIM_SCROLL_STEP);
+    expect(vimPageDelta("d")).toBe(1);
+    expect(vimPageDelta("u")).toBe(-1);
   });
 });
