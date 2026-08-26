@@ -37,6 +37,7 @@ describe("web server", () => {
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('id="new-session-button"');
     expect(page).toContain('id="text-layer"');
+    expect(page).toContain('class="textLayer" id="text-layer" tabindex="0"');
     expect(page).toContain('id="history-list"');
     expect(page).toContain("~/.ultra-learner");
     expect(page).toContain('id="annotation-layer"');

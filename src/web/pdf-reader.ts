@@ -3,13 +3,13 @@ import {
   AnnotationMode,
   GlobalWorkerOptions,
   getDocument,
-  TextLayer,
   type OnProgressParameters,
   type PDFDocumentProxy,
   type PDFDocumentLoadingTask,
   type PDFPageProxy,
   type RenderTask,
 } from "pdfjs-dist";
+import { TextLayerBuilder } from "pdfjs-dist/web/pdf_viewer.mjs";
 
 import { documentTitle, formatFileSize, pdfFileValidationError } from "../lib/files.ts";
 import {
@@ -39,7 +39,7 @@ export interface PdfReaderElements {
   canvasFrame: HTMLElement;
   pageSurface: HTMLElement;
   canvas: HTMLCanvasElement;
-  textLayer: HTMLElement;
+  textLayer: HTMLDivElement;
   annotationLayer: HTMLDivElement;
   boxSelection: HTMLElement;
   thumbnailList: HTMLElement;
@@ -76,7 +76,7 @@ interface ReaderState {
   zoom: number;
   fitScale: number;
   renderTask: RenderTask | null;
-  textLayer: TextLayer | null;
+  textLayer: TextLayerBuilder | null;
   annotationLayer: AnnotationLayer | null;
   annotationCanvasMap: Map<string, HTMLCanvasElement> | null;
   optionalContentConfigPromise: ReturnType<PDFDocumentProxy["getOptionalContentConfig"]> | null;
@@ -386,7 +386,7 @@ export class PdfReaderController {
       const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("[data-page]") : null;
       if (target) void this.goToPage(Number(target.dataset.page));
     });
-    this.elements.textLayer.addEventListener("mouseup", () => {
+    this.elements.pageSurface.addEventListener("mouseup", () => {
       window.setTimeout(() => this.publishNativeSelection(), 0);
     });
     document.addEventListener("selectionchange", () => {
@@ -446,6 +446,7 @@ export class PdfReaderController {
       Math.abs(point.y - start.y),
     );
     const text = Array.from(this.elements.textLayer.querySelectorAll<HTMLElement>("span"))
+      .filter((span) => !span.classList.contains("markedContent") && !span.querySelector("span"))
       .filter((span) => rectanglesIntersect(span.getBoundingClientRect(), selectionRect))
       .map((span) => span.textContent ?? "")
       .join(" ");
@@ -650,11 +651,25 @@ export class PdfReaderController {
         background: "rgb(255, 255, 255)",
       });
       this.state.renderTask = renderTask;
-      const textLayerPromise = page.getTextContent().then((textContent) => {
+      const textLayerPromise = Promise.resolve().then(() => {
         if (renderVersion !== this.state.renderVersion) return;
-        const textLayer = new TextLayer({ textContentSource: textContent, container: this.elements.textLayer, viewport });
+        // PDF.js's builder creates the `.endOfContent` anchor and the global
+        // selection-repair listener. Use its generated node so the reader keeps
+        // the builder's selection lifecycle and its own stable DOM reference.
+        const textLayer = new TextLayerBuilder({ pdfPage: page });
+        textLayer.div.id = "text-layer";
+        textLayer.div.style.width = `${width}px`;
+        textLayer.div.style.height = `${height}px`;
+        textLayer.div.style.setProperty("--total-scale-factor", String(scale));
+        textLayer.div.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
+        textLayer.div.setAttribute(
+          "aria-label",
+          this.state.selectionMode === "box" ? "Draw a box around PDF text" : "Select PDF text",
+        );
+        this.elements.textLayer.replaceWith(textLayer.div);
+        this.elements.textLayer = textLayer.div;
         this.state.textLayer = textLayer;
-        return textLayer.render();
+        return textLayer.render({ viewport, images: undefined as never });
       });
       const annotationsPromise = page.getAnnotations({ intent: "display" });
       await Promise.all([renderTask.promise, textLayerPromise]);
