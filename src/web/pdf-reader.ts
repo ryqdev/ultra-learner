@@ -29,6 +29,8 @@ import { ReaderPdfLinkService } from "./pdf-link-service.ts";
 
 GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.mjs";
 
+const PAGE_RENDER_LOADING_DELAY_MS = 160;
+
 export interface PdfReaderElements {
   readerView: HTMLElement;
   readerStage: HTMLElement;
@@ -120,8 +122,13 @@ export class PdfReaderController {
   };
 
   private resizeTimer: number | undefined;
+  private pageLoadingTimer: number | undefined;
   private boxStart: { x: number; y: number } | null = null;
   private openFileVersion = 0;
+  private mainPageRendering = false;
+  private pendingTextLayer: TextLayerBuilder | null = null;
+  private pendingAnnotationLayer: AnnotationLayer | null = null;
+  private thumbnailRenderTask: RenderTask | null = null;
   private readonly linkService: ReaderPdfLinkService;
   private readonly downloadManager = new ReaderPdfDownloadManager();
 
@@ -227,7 +234,7 @@ export class PdfReaderController {
       document.title = `${documentTitle(filename)} — Ultra Learner`;
       this.clearSelection();
       await this.renderCurrentPage(true);
-      void this.renderThumbnails(pdf, loadVersion);
+      void this.renderThumbnails(pdf);
       return this.state.document === pdf;
     } catch (error) {
       if (loadVersion === this.state.renderVersion) this.showError(error);
@@ -492,7 +499,12 @@ export class PdfReaderController {
   }
 
   private cancelCurrentWork(): void {
+    window.clearTimeout(this.pageLoadingTimer);
+    this.pageLoadingTimer = undefined;
     this.state.renderTask?.cancel();
+    this.pendingTextLayer?.cancel();
+    this.pendingAnnotationLayer?.destroy();
+    this.thumbnailRenderTask?.cancel();
     this.state.textLayer?.cancel();
     this.state.annotationLayer?.destroy();
     void this.state.loadingTask?.destroy();
@@ -500,6 +512,10 @@ export class PdfReaderController {
     this.state.document = null;
     this.state.loadingTask = null;
     this.state.renderTask = null;
+    this.pendingTextLayer = null;
+    this.pendingAnnotationLayer = null;
+    this.thumbnailRenderTask = null;
+    this.mainPageRendering = false;
     this.state.textLayer = null;
     this.state.annotationLayer = null;
     this.state.annotationCanvasMap = null;
@@ -514,10 +530,29 @@ export class PdfReaderController {
   }
 
   private setLoading(message: string): void {
+    window.clearTimeout(this.pageLoadingTimer);
+    this.pageLoadingTimer = undefined;
     this.elements.loadingDetail.textContent = message;
     this.elements.readerLoading.hidden = false;
     this.elements.readerError.hidden = true;
     this.elements.canvasFrame.hidden = true;
+  }
+
+  private deferPageLoading(message: string, renderVersion: number): void {
+    window.clearTimeout(this.pageLoadingTimer);
+    this.elements.loadingDetail.textContent = message;
+    this.elements.readerLoading.hidden = true;
+    this.pageLoadingTimer = window.setTimeout(() => {
+      this.pageLoadingTimer = undefined;
+      if (renderVersion !== this.state.renderVersion || this.elements.canvasFrame.hidden) return;
+      this.elements.readerLoading.hidden = false;
+    }, PAGE_RENDER_LOADING_DELAY_MS);
+  }
+
+  private hideLoading(): void {
+    window.clearTimeout(this.pageLoadingTimer);
+    this.pageLoadingTimer = undefined;
+    this.elements.readerLoading.hidden = true;
   }
 
   private setControlsLoading(): void {
@@ -535,6 +570,8 @@ export class PdfReaderController {
   }
 
   private showError(error: unknown): void {
+    window.clearTimeout(this.pageLoadingTimer);
+    this.pageLoadingTimer = undefined;
     const message = error instanceof Error ? error.message : "The file may be damaged or unsupported.";
     this.elements.errorMessage.textContent = message.includes("password")
       ? "Password-protected PDFs are not supported in this first prototype."
@@ -606,12 +643,26 @@ export class PdfReaderController {
     if (!pdf) return;
 
     const renderVersion = ++this.state.renderVersion;
+    const hadRenderedPage = !this.elements.canvasFrame.hidden;
     this.state.renderTask?.cancel();
-    this.state.textLayer?.cancel();
-    this.state.annotationLayer?.destroy();
-    this.state.annotationLayer = null;
-    this.state.annotationCanvasMap = null;
-    this.setLoading(`Rendering page ${this.state.page}…`);
+    this.pendingTextLayer?.cancel();
+    this.pendingAnnotationLayer?.destroy();
+    this.thumbnailRenderTask?.cancel();
+    this.state.renderTask = null;
+    this.pendingTextLayer = null;
+    this.pendingAnnotationLayer = null;
+    this.thumbnailRenderTask = null;
+    this.mainPageRendering = true;
+    if (hadRenderedPage) {
+      this.deferPageLoading(`Rendering page ${this.state.page}…`, renderVersion);
+    } else {
+      this.setLoading(`Rendering page ${this.state.page}…`);
+    }
+
+    let renderTask: RenderTask | null = null;
+    let textLayer: TextLayerBuilder | null = null;
+    let annotationLayer: AnnotationLayer | null = null;
+    let committed = false;
 
     try {
       const page = await pdf.getPage(this.state.page);
@@ -623,26 +674,15 @@ export class PdfReaderController {
       const width = Math.floor(viewport.width);
       const height = Math.floor(viewport.height);
 
-      this.elements.pageSurface.style.width = `${width}px`;
-      this.elements.pageSurface.style.height = `${height}px`;
-      this.elements.canvas.width = Math.floor(viewport.width * deviceScale);
-      this.elements.canvas.height = Math.floor(viewport.height * deviceScale);
-      this.elements.canvas.style.width = `${width}px`;
-      this.elements.canvas.style.height = `${height}px`;
-      this.elements.textLayer.style.width = `${width}px`;
-      this.elements.textLayer.style.height = `${height}px`;
-      this.elements.textLayer.style.setProperty("--total-scale-factor", String(scale));
-      this.elements.textLayer.replaceChildren();
-      this.elements.pageSurface.style.setProperty("--total-scale-factor", String(scale));
-      this.elements.pageSurface.style.setProperty("--scale-round-x", "1px");
-      this.elements.pageSurface.style.setProperty("--scale-round-y", "1px");
-      this.elements.annotationLayer.replaceChildren();
+      const canvas = this.elements.canvas.cloneNode(false) as HTMLCanvasElement;
+      canvas.width = Math.floor(viewport.width * deviceScale);
+      canvas.height = Math.floor(viewport.height * deviceScale);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
 
       const annotationCanvasMap = new Map<string, HTMLCanvasElement>();
-      this.state.annotationCanvasMap = annotationCanvasMap;
-
-      const renderTask = page.render({
-        canvas: this.elements.canvas,
+      renderTask = page.render({
+        canvas,
         viewport,
         annotationMode: AnnotationMode.ENABLE_FORMS,
         annotationCanvasMap,
@@ -651,26 +691,20 @@ export class PdfReaderController {
         background: "rgb(255, 255, 255)",
       });
       this.state.renderTask = renderTask;
-      const textLayerPromise = Promise.resolve().then(() => {
-        if (renderVersion !== this.state.renderVersion) return;
-        // PDF.js's builder creates the `.endOfContent` anchor and the global
-        // selection-repair listener. Use its generated node so the reader keeps
-        // the builder's selection lifecycle and its own stable DOM reference.
-        const textLayer = new TextLayerBuilder({ pdfPage: page });
-        textLayer.div.id = "text-layer";
-        textLayer.div.style.width = `${width}px`;
-        textLayer.div.style.height = `${height}px`;
-        textLayer.div.style.setProperty("--total-scale-factor", String(scale));
-        textLayer.div.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
-        textLayer.div.setAttribute(
-          "aria-label",
-          this.state.selectionMode === "box" ? "Draw a box around PDF text" : "Select PDF text",
-        );
-        this.elements.textLayer.replaceWith(textLayer.div);
-        this.elements.textLayer = textLayer.div;
-        this.state.textLayer = textLayer;
-        return textLayer.render({ viewport, images: undefined as never });
-      });
+      // Build every layer away from the visible page, then commit them together.
+      // This keeps the previous page readable while PDF.js prepares the next one.
+      textLayer = new TextLayerBuilder({ pdfPage: page });
+      this.pendingTextLayer = textLayer;
+      textLayer.div.id = "text-layer";
+      textLayer.div.style.width = `${width}px`;
+      textLayer.div.style.height = `${height}px`;
+      textLayer.div.style.setProperty("--total-scale-factor", String(scale));
+      textLayer.div.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
+      textLayer.div.setAttribute(
+        "aria-label",
+        this.state.selectionMode === "box" ? "Draw a box around PDF text" : "Select PDF text",
+      );
+      const textLayerPromise = textLayer.render({ viewport, images: undefined as never });
       const annotationsPromise = page.getAnnotations({ intent: "display" });
       await Promise.all([renderTask.promise, textLayerPromise]);
       if (renderVersion !== this.state.renderVersion) return;
@@ -686,7 +720,7 @@ export class PdfReaderController {
       annotationLayerElement.className = "annotationLayer";
       annotationLayerElement.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
       annotationLayerElement.setAttribute("aria-label", "PDF links and annotations");
-      const annotationLayer = new AnnotationLayer({
+      annotationLayer = new AnnotationLayer({
         div: annotationLayerElement,
         accessibilityManager: null,
         annotationEditorUIManager: null,
@@ -698,6 +732,7 @@ export class PdfReaderController {
         annotationStorage: pdf.annotationStorage,
         annotationCanvasMap,
       });
+      this.pendingAnnotationLayer = annotationLayer;
       await annotationLayer.render({
         viewport: annotationViewport,
         div: annotationLayerElement,
@@ -718,22 +753,71 @@ export class PdfReaderController {
         annotationLayer.destroy();
         return;
       }
+
+      this.state.textLayer?.cancel();
+      this.state.annotationLayer?.destroy();
+      this.elements.pageSurface.style.width = `${width}px`;
+      this.elements.pageSurface.style.height = `${height}px`;
+      this.elements.pageSurface.style.setProperty("--total-scale-factor", String(scale));
+      this.elements.pageSurface.style.setProperty("--scale-round-x", "1px");
+      this.elements.pageSurface.style.setProperty("--scale-round-y", "1px");
+      this.elements.canvas.replaceWith(canvas);
+      this.elements.canvas = canvas;
+      this.elements.textLayer.replaceWith(textLayer.div);
+      this.elements.textLayer = textLayer.div;
       this.elements.annotationLayer.replaceWith(annotationLayerElement);
       this.elements.annotationLayer = annotationLayerElement;
+      this.state.renderTask = null;
+      this.pendingTextLayer = null;
+      this.pendingAnnotationLayer = null;
+      this.state.textLayer = textLayer;
       this.state.annotationLayer = annotationLayer;
+      this.state.annotationCanvasMap = annotationCanvasMap;
+      committed = true;
 
-      this.elements.readerLoading.hidden = true;
+      this.hideLoading();
       this.elements.readerError.hidden = true;
       this.elements.canvasFrame.hidden = false;
       this.elements.readerStage.scrollTo({ top: 0, left: 0 });
       this.updateControls();
+      this.prefetchAdjacentPages(pdf, this.state.page);
     } catch (error) {
       if (isRenderingCancelled(error) || (error instanceof Error && error.name === "AbortException")) return;
       if (renderVersion === this.state.renderVersion) this.showError(error);
+    } finally {
+      if (!committed) {
+        textLayer?.cancel();
+        annotationLayer?.destroy();
+      }
+      if (this.state.renderTask === renderTask) this.state.renderTask = null;
+      if (this.pendingTextLayer === textLayer) this.pendingTextLayer = null;
+      if (this.pendingAnnotationLayer === annotationLayer) this.pendingAnnotationLayer = null;
+      if (renderVersion === this.state.renderVersion) this.mainPageRendering = false;
     }
   }
 
-  private async renderThumbnails(pdf: PDFDocumentProxy, loadVersion: number): Promise<void> {
+  private prefetchAdjacentPages(pdf: PDFDocumentProxy, page: number): void {
+    for (const candidate of [page - 1, page + 1]) {
+      if (candidate >= 1 && candidate <= pdf.numPages) void pdf.getPage(candidate).catch(() => undefined);
+    }
+  }
+
+  private async waitForThumbnailOpportunity(pdf: PDFDocumentProxy): Promise<boolean> {
+    while (this.mainPageRendering && this.state.document === pdf) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 32));
+    }
+    if (this.state.document !== pdf) return false;
+    await new Promise<void>((resolve) => {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(() => resolve(), { timeout: 300 });
+      } else {
+        window.setTimeout(resolve, 32);
+      }
+    });
+    return !this.mainPageRendering && this.state.document === pdf;
+  }
+
+  private async renderThumbnails(pdf: PDFDocumentProxy): Promise<void> {
     const fragment = document.createDocumentFragment();
     const buttons: HTMLButtonElement[] = [];
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -756,18 +840,27 @@ export class PdfReaderController {
     this.updateActiveThumbnail();
 
     for (let index = 0; index < buttons.length; index += 1) {
-      if (loadVersion !== this.state.renderVersion && this.state.document !== pdf) return;
       const thumbnail = buttons[index]?.querySelector("canvas");
       if (!thumbnail) continue;
-      try {
-        const page = await pdf.getPage(index + 1);
-        const natural = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: 132 / natural.width });
-        thumbnail.width = Math.floor(viewport.width);
-        thumbnail.height = Math.floor(viewport.height);
-        await page.render({ canvas: thumbnail, viewport }).promise;
-      } catch {
-        // A thumbnail is optional; the main page remains usable if one fails.
+      let rendered = false;
+      while (!rendered && this.state.document === pdf) {
+        if (!await this.waitForThumbnailOpportunity(pdf)) continue;
+        try {
+          const page = await pdf.getPage(index + 1);
+          if (this.mainPageRendering || this.state.document !== pdf) continue;
+          const natural = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: 132 / natural.width });
+          thumbnail.width = Math.floor(viewport.width);
+          thumbnail.height = Math.floor(viewport.height);
+          const renderTask = page.render({ canvas: thumbnail, viewport });
+          this.thumbnailRenderTask = renderTask;
+          await renderTask.promise;
+          rendered = true;
+        } catch (error) {
+          if (!isRenderingCancelled(error)) break;
+        } finally {
+          this.thumbnailRenderTask = null;
+        }
       }
     }
   }

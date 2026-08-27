@@ -911,7 +911,6 @@ main {
   text-align: center;
 }
 
-.reader-loading strong,
 .reader-error strong {
   margin: 13px 0 5px;
   color: var(--ink);
@@ -920,7 +919,6 @@ main {
   font-weight: 600;
 }
 
-.reader-loading span:last-child,
 .reader-error p {
   max-width: 420px;
   margin: 0;
@@ -928,9 +926,14 @@ main {
   line-height: 1.6;
 }
 
+.reader-loading {
+  z-index: 4;
+  pointer-events: none;
+}
+
 .loader {
-  width: 31px;
-  height: 31px;
+  width: 24px;
+  height: 24px;
   border: 2px solid rgba(47, 101, 86, 0.17);
   border-top-color: var(--green-bright);
   border-radius: 50%;

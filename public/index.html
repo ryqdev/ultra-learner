@@ -140,10 +140,9 @@
             </div>
 
             <div class="reader-stage" id="reader-stage">
-              <div class="reader-loading" id="reader-loading" role="status">
-                <span class="loader"></span>
-                <strong>Preparing your reading space</strong>
-                <span id="loading-detail">Opening document…</span>
+              <div class="reader-loading" id="reader-loading" role="status" aria-live="polite">
+                <span class="loader" aria-hidden="true"></span>
+                <span class="sr-only" id="loading-detail">Opening document…</span>
               </div>
               <div class="canvas-frame" id="canvas-frame" hidden>
                 <div class="page-surface" id="page-surface">

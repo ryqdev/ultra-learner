@@ -82,6 +82,9 @@ describe("web server", () => {
     expect(page).toContain("~/.ultra-learner");
     expect(page).toContain('id="annotation-layer"');
     expect(page).toContain('/assets/pdf_viewer.css');
+    expect(page).toContain('class="loader" aria-hidden="true"');
+    expect(page).toContain('class="sr-only" id="loading-detail"');
+    expect(page).not.toContain("Preparing your reading space");
 
     const healthResponse = await fetch(new URL("/health", server.url));
     expect(await healthResponse.json()).toEqual({ status: "ok" });

@@ -10,7 +10,7 @@ The repository needs an initial product that lets a learner open and comfortably
 
 The first Ultra Learner product is a single-process Bun application with a local-first browser reader. Bun serves the static shell, bundles the TypeScript browser entry on request, and provides the PDF.js worker assets. PDF.js is the sole runtime dependency and parses selected file bytes in a web worker. The initial reader kept selected documents only in browser memory; the later [local PDF session history](2026-08-26-local-pdf-session-history.md) decision supersedes that ephemeral document boundary while retaining browser-owned parsing and rendering.
 
-The reader renders one main canvas page at a time and generates a thumbnail rail for navigation. Deterministic page, zoom, progress, filename, and file-validation rules live outside the DOM layer so tests can describe behavior without duplicating rendering implementation. Repository-owned HTML and CSS define the responsive interface without a UI framework.
+The reader renders one main canvas page at a time and generates a thumbnail rail for navigation. Page changes render the next canvas, text, and annotation layers off-screen before replacing the displayed page as one unit, so the current page remains visible instead of flashing an empty loading view. Main-page work cancels and takes priority over idle-scheduled thumbnail rendering. A delayed, text-free spinner appears over the current page only when a render is not fast enough to complete within the short transition threshold. Deterministic page, zoom, progress, filename, and file-validation rules live outside the DOM layer so tests can describe behavior without duplicating rendering implementation. Repository-owned HTML and CSS define the responsive interface without a UI framework.
 
 After a selected file passes local type and size validation, the reader switches views immediately and exposes the existing loading state while the browser reads the file and PDF.js parses it. Invalid candidates do not force a view transition, so a validation toast cannot strand the user in an empty reader.
 
@@ -32,6 +32,6 @@ A small sample PDF is generated in browser memory and passed through the same lo
 
 - Users can inspect the full reading experience immediately and can open their own PDF without creating an account; user uploads now pass through the loopback application server for the local persistence defined by the session-history decision.
 - PDF.js and its worker become versioned runtime assets and Bun now owns a dependency lockfile.
-- Large documents still occupy browser memory, thumbnail generation is intentionally sequential, and the 100 MB interface limit bounds the first prototype rather than guaranteeing smooth rendering at that size.
+- Large documents still occupy browser memory, thumbnail generation remains sequential but yields to main-page work, and the 100 MB interface limit bounds the first prototype rather than guaranteeing smooth rendering at that size.
 - Annotations, full-text search, password entry, and server-side learning features remain future product decisions; session persistence is now owned by the later session-history note.
 - The UI remains easy to replace or componentize after real usage reveals stable boundaries, but explicit DOM event wiring will become less attractive as interaction complexity grows.
