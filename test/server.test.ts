@@ -74,6 +74,10 @@ describe("web server", () => {
     expect(page).not.toContain('id="sidebar-open-pdf"');
     expect(page).not.toContain(">Open PDF<");
     expect(page).toContain('id="history-list"');
+    expect(page).toContain('id="session-delete-dialog"');
+    expect(page).toContain('aria-labelledby="session-delete-title"');
+    expect(page).toContain('id="session-delete-filename"');
+    expect(page).toContain('value="delete"');
     expect(page).toContain("~/.ultra-learner");
     expect(page).toContain('id="annotation-layer"');
     expect(page).toContain('/assets/pdf_viewer.css');

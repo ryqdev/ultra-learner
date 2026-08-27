@@ -48,6 +48,8 @@ const toast = requiredElement("toast");
 const historyList = requiredElement("history-list");
 const historyStatus = requiredElement("history-status");
 const historyCount = requiredElement("history-count");
+const sessionDeleteDialog = requiredElement<HTMLDialogElement>("session-delete-dialog");
+const sessionDeleteFilename = requiredElement("session-delete-filename");
 
 readerView.style.setProperty("--chat-panel-min-width", `${MIN_CHAT_PANEL_WIDTH}px`);
 readerView.style.setProperty("--chat-panel-width", `${DEFAULT_CHAT_PANEL_WIDTH}px`);
@@ -63,6 +65,7 @@ let sessions: SessionSummary[] = [];
 let openingSessionId: string | null = null;
 let deletingSessionId: string | null = null;
 let activeSessionId: string | null = null;
+let pendingDeleteSession: SessionSummary | null = null;
 
 function showToast(message: string): void {
   toast.textContent = message;
@@ -272,13 +275,16 @@ async function openSession(session: SessionSummary): Promise<void> {
   }
 }
 
+function requestSessionDeletion(session: SessionSummary): void {
+  if (openingSessionId || deletingSessionId || sessionDeleteDialog.open) return;
+  pendingDeleteSession = session;
+  sessionDeleteFilename.textContent = session.filename;
+  sessionDeleteDialog.returnValue = "";
+  sessionDeleteDialog.showModal();
+}
+
 async function removeSession(session: SessionSummary): Promise<void> {
   if (openingSessionId || deletingSessionId) return;
-  const confirmed = window.confirm(
-    `Delete "${session.filename}" from local history?\n\nThis removes its saved PDF from this device and cannot be undone.`,
-  );
-  if (!confirmed) return;
-
   deletingSessionId = session.id;
   renderHistory();
   try {
@@ -299,12 +305,24 @@ async function removeSession(session: SessionSummary): Promise<void> {
   }
 }
 
+sessionDeleteDialog.addEventListener("click", (event) => {
+  if (event.target === sessionDeleteDialog) sessionDeleteDialog.close("cancel");
+});
+
+sessionDeleteDialog.addEventListener("close", () => {
+  const session = pendingDeleteSession;
+  const confirmed = sessionDeleteDialog.returnValue === "delete";
+  pendingDeleteSession = null;
+  sessionDeleteDialog.returnValue = "";
+  if (confirmed && session) void removeSession(session);
+});
+
 historyList.addEventListener("click", (event) => {
   const element = event.target instanceof Element ? event.target : null;
   const deleteTarget = element?.closest<HTMLButtonElement>("[data-session-delete]");
   if (deleteTarget) {
     const session = sessions.find((candidate) => candidate.id === deleteTarget.dataset.sessionDelete);
-    if (session) void removeSession(session);
+    if (session) requestSessionDeletion(session);
     return;
   }
 
@@ -533,6 +551,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (sessionDeleteDialog.open) return;
   if (event.key === "Escape" && appShell.classList.contains("sidebar-open")) {
     setMobileSidebarOpen(false);
     appSidebarToggle.focus();

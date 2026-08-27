@@ -388,6 +388,27 @@
 
     </div>
 
+    <dialog
+      class="session-delete-dialog"
+      id="session-delete-dialog"
+      aria-labelledby="session-delete-title"
+      aria-describedby="session-delete-message session-delete-detail"
+    >
+      <form method="dialog">
+        <h2 id="session-delete-title">Delete PDF?</h2>
+        <p class="session-delete-message" id="session-delete-message">
+          This will permanently delete <strong id="session-delete-filename"></strong> from local history.
+        </p>
+        <p class="session-delete-detail" id="session-delete-detail">
+          Its saved PDF will be removed from this device. This cannot be undone.
+        </p>
+        <div class="session-delete-actions">
+          <button class="session-delete-cancel" type="submit" value="cancel" autofocus>Cancel</button>
+          <button class="session-delete-confirm" type="submit" value="delete">Delete</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     <script type="module" src="/assets/app.js"></script>
   </body>
