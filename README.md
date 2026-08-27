@@ -32,7 +32,7 @@ bun run dev
 - Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A selectable PDF.js text layer, box selection mode, and a synchronized AI study companion panel.
 - A guided provider setup with common hosted/local presets, inline endpoint help, API-key visibility control, and named model profiles. After entering an API key and Base URL, use Fetch models to load the provider's model catalog and any advertised reasoning levels; model and reasoning choices are selected from those results instead of typed manually. Model discovery, connection tests, and chat calls go through the same-origin Bun proxy, so providers do not need browser CORS support. Profiles are stored in this browser's origin-local storage and can be selected across PDF and conversation sessions on the same device; the API key is only forwarded to the configured provider through the local proxy.
-- A New session action in the reader starts a fresh AI conversation for the currently open PDF while keeping the document and provider settings in place.
+- The workspace's New chat action starts a fresh AI conversation for the currently open PDF while keeping the document and provider settings in place.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.
 
