@@ -8,7 +8,7 @@ The workspace sidebar duplicated the PDF entry point with an `Open PDF` action, 
 
 ## Decision
 
-The sidebar now keeps only conversation and library navigation; PDF selection remains available from the focused home upload card and from the reader's `New PDF` control. The home screen uses a centered single-column layout, retains the drag-and-drop/file-picker card, sample guide link, local-storage explanation, and footer, and removes the large decorative page illustration.
+The sidebar now keeps only conversation and library navigation; PDF selection remains available from the focused home upload card. The home screen uses a centered single-column layout, retains the drag-and-drop/file-picker card, sample guide link, local-storage explanation, and footer, and removes the large decorative page illustration. The reader's original `New PDF` shortcut was later removed by the [reader AI entry-point consolidation](2026-08-27-reader-ai-entry-point.md), leaving the Library as the single file-entry surface.
 
 ## Alternatives considered
 
@@ -21,6 +21,6 @@ The sidebar now keeps only conversation and library navigation; PDF selection re
 ## Consequences
 
 - New users see one clear PDF entry point when they are in the Library view.
-- Existing reader behavior remains unchanged; `New PDF` still opens the file picker without requiring a return to the home screen.
+- Opening another PDF now intentionally starts from the Library, keeping file selection in one focused surface.
 - The home layout has fewer decorative elements and adapts as a single centered column across desktop and compact widths.
 - The sidebar contract and architecture documentation now describe only the controls that are actually present.

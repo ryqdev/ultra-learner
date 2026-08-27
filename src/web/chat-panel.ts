@@ -328,6 +328,7 @@ export class ChatPanelController {
     const newOption = document.createElement("option");
     newOption.value = "";
     newOption.textContent = "New model…";
+    newOption.dataset.placeholder = "true";
     elements.profileSelect.append(newOption);
     for (const profile of this.profileState.profiles) {
       const option = document.createElement("option");
@@ -503,6 +504,7 @@ export class ChatPanelController {
     const placeholder = document.createElement("option");
     placeholder.value = "";
     placeholder.textContent = models.length > 0 ? "Choose a model…" : "Fetch models to choose one…";
+    placeholder.dataset.placeholder = "true";
     elements.modelSelect.append(placeholder);
     for (const model of models) {
       const option = document.createElement("option");
