@@ -30,6 +30,7 @@ describe("web server", () => {
     expect(pageResponse.status).toBe(200);
     expect(pageResponse.headers.get("content-type")).toContain("text/html");
     expect(page).toContain("Ultra Learner");
+    expect(page).not.toContain("Stays on this device");
     expect(page).toContain("Choose PDF");
     expect(page).toContain('id="chat-panel"');
     expect(page).toContain('id="chat-resize-handle"');

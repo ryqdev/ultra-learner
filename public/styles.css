@@ -148,28 +148,6 @@ svg {
   gap: 12px;
 }
 
-.privacy-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  color: #59645e;
-  border: 1px solid rgba(74, 84, 78, 0.15);
-  border-radius: 999px;
-  background: rgba(255, 253, 248, 0.55);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.privacy-pill svg {
-  width: 15px;
-  fill: none;
-  stroke: var(--green-bright);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .icon-button,
 .tool-button,
 .document-icon,
@@ -2168,10 +2146,6 @@ body.is-dark .thumbnail-item.is-active {
 
   .topbar {
     padding: 0 20px;
-  }
-
-  .privacy-pill {
-    display: none;
   }
 
   .welcome-view {
