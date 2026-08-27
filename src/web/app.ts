@@ -1,6 +1,7 @@
 import { ChatPanelController } from "./chat-panel.ts";
 import { requiredElement } from "./dom.ts";
 import { PdfReaderController } from "./pdf-reader.ts";
+import { configureSessionDeleteDialog } from "./session-delete-dialog.ts";
 import {
   deleteSession,
   listSessions,
@@ -50,6 +51,8 @@ const historyStatus = requiredElement("history-status");
 const historyCount = requiredElement("history-count");
 const sessionDeleteDialog = requiredElement<HTMLDialogElement>("session-delete-dialog");
 const sessionDeleteFilename = requiredElement("session-delete-filename");
+const sessionDeleteCancel = requiredElement<HTMLButtonElement>("session-delete-cancel");
+const sessionDeleteConfirm = requiredElement<HTMLButtonElement>("session-delete-confirm");
 
 readerView.style.setProperty("--chat-panel-min-width", `${MIN_CHAT_PANEL_WIDTH}px`);
 readerView.style.setProperty("--chat-panel-width", `${DEFAULT_CHAT_PANEL_WIDTH}px`);
@@ -65,7 +68,6 @@ let sessions: SessionSummary[] = [];
 let openingSessionId: string | null = null;
 let deletingSessionId: string | null = null;
 let activeSessionId: string | null = null;
-let pendingDeleteSession: SessionSummary | null = null;
 
 function showToast(message: string): void {
   toast.textContent = message;
@@ -228,12 +230,8 @@ function renderHistory(): void {
   historyList.replaceChildren(...sessions.map(historyItem));
   historyCount.hidden = sessions.length === 0;
   historyCount.textContent = `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`;
-  if (sessions.length === 0) {
-    historyStatus.textContent = "Your uploaded PDFs will appear here.";
-    historyStatus.hidden = false;
-  } else {
-    historyStatus.hidden = true;
-  }
+  historyStatus.textContent = "";
+  historyStatus.hidden = true;
 }
 
 async function refreshHistory(): Promise<void> {
@@ -275,14 +273,6 @@ async function openSession(session: SessionSummary): Promise<void> {
   }
 }
 
-function requestSessionDeletion(session: SessionSummary): void {
-  if (openingSessionId || deletingSessionId || sessionDeleteDialog.open) return;
-  pendingDeleteSession = session;
-  sessionDeleteFilename.textContent = session.filename;
-  sessionDeleteDialog.returnValue = "";
-  sessionDeleteDialog.showModal();
-}
-
 async function removeSession(session: SessionSummary): Promise<void> {
   if (openingSessionId || deletingSessionId) return;
   deletingSessionId = session.id;
@@ -305,16 +295,20 @@ async function removeSession(session: SessionSummary): Promise<void> {
   }
 }
 
+const openSessionDeleteDialog = configureSessionDeleteDialog({
+  dialog: sessionDeleteDialog,
+  filename: sessionDeleteFilename,
+  cancelButton: sessionDeleteCancel,
+  confirmButton: sessionDeleteConfirm,
+}, (session) => void removeSession(session));
+
+function requestSessionDeletion(session: SessionSummary): void {
+  if (openingSessionId || deletingSessionId) return;
+  openSessionDeleteDialog(session);
+}
+
 sessionDeleteDialog.addEventListener("click", (event) => {
   if (event.target === sessionDeleteDialog) sessionDeleteDialog.close("cancel");
-});
-
-sessionDeleteDialog.addEventListener("close", () => {
-  const session = pendingDeleteSession;
-  const confirmed = sessionDeleteDialog.returnValue === "delete";
-  pendingDeleteSession = null;
-  sessionDeleteDialog.returnValue = "";
-  if (confirmed && session) void removeSession(session);
 });
 
 historyList.addEventListener("click", (event) => {

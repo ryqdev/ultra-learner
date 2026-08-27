@@ -77,7 +77,8 @@ describe("web server", () => {
     expect(page).toContain('id="session-delete-dialog"');
     expect(page).toContain('aria-labelledby="session-delete-title"');
     expect(page).toContain('id="session-delete-filename"');
-    expect(page).toContain('value="delete"');
+    expect(page).toContain('id="session-delete-cancel" type="button"');
+    expect(page).toContain('id="session-delete-confirm" type="button"');
     expect(page).toContain("~/.ultra-learner");
     expect(page).toContain('id="annotation-layer"');
     expect(page).toContain('/assets/pdf_viewer.css');
@@ -92,7 +93,9 @@ describe("web server", () => {
     const appResponse = await fetch(new URL("/assets/app.js", server.url));
     expect(appResponse.status).toBe(200);
     expect(appResponse.headers.get("content-type")).toContain("text/javascript");
-    expect((await appResponse.text()).length).toBeGreaterThan(100_000);
+    const app = await appResponse.text();
+    expect(app.length).toBeGreaterThan(100_000);
+    expect(app).not.toContain("Your uploaded PDFs will appear here.");
 
     const postResponse = await fetch(server.url, { method: "POST" });
     expect(postResponse.status).toBe(405);

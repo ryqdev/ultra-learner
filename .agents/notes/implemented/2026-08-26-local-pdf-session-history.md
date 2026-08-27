@@ -31,5 +31,5 @@ The browser continues to own PDF parsing and rendering. It validates the file at
 - Disk use grows until the learner explicitly deletes sessions; automatic retention and bulk deletion remain out of scope.
 - Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral.
 - The workspace sidebar is a presentation and navigation layer over the same session API; collapsing it or opening it as a mobile drawer does not alter stored sessions.
-- Deletion is irreversible at the application layer, so it is kept separate from the open action and requires a keyboard-accessible modal confirmation before the request is sent.
+- Deletion is irreversible at the application layer, so it is kept separate from the open action and requires a keyboard-accessible modal confirmation before the request is sent. The application handles the modal actions explicitly so deletion is not coupled to form submission values propagating through `<dialog>`.
 - The version field gives future migrations an explicit compatibility boundary; unsupported, malformed, symlinked, incomplete, or size-mismatched entries are hidden from history.
