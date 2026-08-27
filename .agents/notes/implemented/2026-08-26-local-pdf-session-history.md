@@ -8,7 +8,7 @@ Uploaded documents disappeared when the tab closed, so a learner could not retur
 
 ## Decision
 
-Each successfully parsed user upload creates an immutable local session through the loopback Bun server. The default storage root is `~/.ultra-learner`; every session has an opaque ID and owns a directory under `sessions/` containing the original bytes as `document.pdf` and versioned `metadata.json`. Metadata records the ID, source filename, byte size, and creation time. The application exposes valid sessions newest-first in a persistent ChatGPT-style workspace sidebar, including while the home screen is visible, and retrieves the stored PDF through an ID-based endpoint when the learner reopens one. The generated sample remains ephemeral and does not enter history.
+Each successfully parsed user upload creates a local session through the loopback Bun server. The default storage root is `~/.ultra-learner`; every session has an opaque ID and owns a directory under `sessions/` containing the original bytes as `document.pdf` and versioned `metadata.json`. Metadata records the ID, source filename, byte size, and creation time. The application exposes valid sessions newest-first in a persistent ChatGPT-style workspace sidebar, including while the home screen is visible, and retrieves the stored PDF through an ID-based endpoint when the learner reopens one. A separately labeled delete control requires confirmation, then removes that session's complete directory. Deleting the active session returns the learner to Library; the generated sample remains ephemeral and does not enter history.
 
 The browser continues to own PDF parsing and rendering. It validates the file at entry, keeps the original byte array for persistence, and gives PDF.js a copy because the worker may transfer its input buffer. Persistence starts only after PDF.js successfully opens the document, so rejected candidates do not leave history entries. The server validates size, filename, PDF header, opaque IDs, metadata, regular-file boundaries, and stored byte size. Incomplete or corrupt directories are ignored rather than breaking the whole history.
 
@@ -22,11 +22,14 @@ The browser continues to own PDF parsing and rendering. It validates the file at
 
 **Add a database.** A database would support richer queries and mutable progress, annotations, or messages, but immutable metadata directories are sufficient for the current list-and-reopen behavior and remain easy to inspect and recover.
 
+**Use retention rules or bulk deletion.** Automatic cleanup could bound disk use with fewer interactions, but it risks removing material without an explicit choice. Per-session deletion keeps ownership clear and leaves retention policy out of scope.
+
 ## Consequences
 
 - Uploaded PDF bytes now cross the browser/server boundary, but remain on the same device under the local application's control; privacy copy and architecture documentation must describe that boundary accurately.
 - Repeated uploads intentionally create separate sessions, even when filenames or bytes match.
-- Disk use grows until a future deletion or retention feature is introduced.
+- Disk use grows until the learner explicitly deletes sessions; automatic retention and bulk deletion remain out of scope.
 - Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral.
 - The workspace sidebar is a presentation and navigation layer over the same session API; collapsing it or opening it as a mobile drawer does not alter stored sessions.
+- Deletion is irreversible at the application layer, so it is kept separate from the open action and requires browser confirmation.
 - The version field gives future migrations an explicit compatibility boundary; unsupported, malformed, symlinked, incomplete, or size-mismatched entries are hidden from history.

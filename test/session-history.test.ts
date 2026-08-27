@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  deleteSession,
   formatSessionDate,
   listSessions,
   loadSessionPdf,
@@ -45,6 +46,20 @@ describe("browser session transport", () => {
       .rejects.toThrow("no longer available");
     await expect(listSessions(async () => Response.json({ error: "Disk unavailable" }, { status: 500 })))
       .rejects.toThrow("Disk unavailable");
+  });
+
+  test("deletes a persisted session and reports missing sessions", async () => {
+    let request: Request | undefined;
+    await deleteSession(session, async (input, init) => {
+      const target = typeof input === "string" && input.startsWith("/") ? `http://local.test${input}` : input;
+      request = new Request(target, init);
+      return new Response(null, { status: 204 });
+    });
+
+    expect(request?.method).toBe("DELETE");
+    expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}`);
+    await expect(deleteSession(session, async () => new Response("Not found", { status: 404 })))
+      .rejects.toThrow("no longer available");
   });
 
   test("formats local session metadata for the history list", () => {

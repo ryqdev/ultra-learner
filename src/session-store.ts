@@ -121,6 +121,19 @@ export class SessionStore {
     }
   }
 
+  public async deleteSession(id: string): Promise<void> {
+    if (!isSessionId(id)) throw new SessionNotFoundError();
+    await this.getSessionDocument(id);
+    try {
+      await rm(this.sessionDirectory(id), { recursive: true });
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        throw new SessionNotFoundError();
+      }
+      throw error;
+    }
+  }
+
   private get sessionsRoot(): string {
     return join(this.root, SESSIONS_DIRECTORY);
   }

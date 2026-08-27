@@ -3,6 +3,7 @@ import { ChatPanelController } from "./chat-panel.ts";
 import { requiredElement } from "./dom.ts";
 import { PdfReaderController } from "./pdf-reader.ts";
 import {
+  deleteSession,
   listSessions,
   loadSessionPdf,
   saveSession,
@@ -63,6 +64,7 @@ let chatResizePointerId: number | null = null;
 let chatResizeStart: { pointerX: number; panelWidth: number } | null = null;
 let sessions: SessionSummary[] = [];
 let openingSessionId: string | null = null;
+let deletingSessionId: string | null = null;
 let activeSessionId: string | null = null;
 
 function showToast(message: string): void {
@@ -171,17 +173,21 @@ function showWelcome(): void {
   void refreshHistory();
 }
 
-function historyItem(session: SessionSummary): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "history-item";
-  button.dataset.sessionId = session.id;
-  button.disabled = openingSessionId !== null;
-  button.setAttribute("aria-label", `Open ${session.filename}`);
+function historyItem(session: SessionSummary): HTMLElement {
+  const item = document.createElement("div");
+  item.className = "history-item";
+  if (openingSessionId !== null || deletingSessionId !== null) item.classList.add("is-busy");
   if (activeSessionId === session.id) {
-    button.classList.add("is-active");
-    button.setAttribute("aria-current", "page");
+    item.classList.add("is-active");
   }
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "history-item-open";
+  openButton.dataset.sessionOpen = session.id;
+  openButton.disabled = openingSessionId !== null || deletingSessionId !== null;
+  openButton.setAttribute("aria-label", `Open ${session.filename}`);
+  if (activeSessionId === session.id) openButton.setAttribute("aria-current", "page");
 
   const icon = document.createElement("span");
   icon.className = "history-item-icon";
@@ -193,15 +199,30 @@ function historyItem(session: SessionSummary): HTMLButtonElement {
   const filename = document.createElement("strong");
   filename.textContent = session.filename;
   const metadata = document.createElement("span");
-  metadata.textContent = openingSessionId === session.id ? "Opening local session…" : sessionMeta(session);
+  metadata.textContent = openingSessionId === session.id
+    ? "Opening local session…"
+    : deletingSessionId === session.id
+      ? "Deleting local session…"
+      : sessionMeta(session);
   copy.append(filename, metadata);
 
   const arrow = document.createElement("span");
   arrow.className = "history-item-arrow";
   arrow.setAttribute("aria-hidden", "true");
   arrow.textContent = "→";
-  button.append(icon, copy, arrow);
-  return button;
+  openButton.append(icon, copy, arrow);
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "history-item-delete";
+  deleteButton.dataset.sessionDelete = session.id;
+  deleteButton.disabled = openingSessionId !== null || deletingSessionId !== null;
+  deleteButton.setAttribute("aria-label", `Delete ${session.filename}`);
+  deleteButton.title = `Delete ${session.filename}`;
+  deleteButton.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 6h11m-7.5 3v5m4-5v5M6 6l.7 10h6.6L14 6M8 6V3.8h4V6"/></svg>';
+
+  item.append(openButton, deleteButton);
+  return item;
 }
 
 function renderHistory(): void {
@@ -235,7 +256,7 @@ async function refreshHistory(): Promise<void> {
 }
 
 async function openSession(session: SessionSummary): Promise<void> {
-  if (openingSessionId) return;
+  if (openingSessionId || deletingSessionId) return;
   openingSessionId = session.id;
   renderHistory();
   try {
@@ -255,12 +276,45 @@ async function openSession(session: SessionSummary): Promise<void> {
   }
 }
 
+async function removeSession(session: SessionSummary): Promise<void> {
+  if (openingSessionId || deletingSessionId) return;
+  const confirmed = window.confirm(
+    `Delete "${session.filename}" from local history?\n\nThis removes its saved PDF from this device and cannot be undone.`,
+  );
+  if (!confirmed) return;
+
+  deletingSessionId = session.id;
+  renderHistory();
+  try {
+    await deleteSession(session);
+    sessions = sessions.filter((candidate) => candidate.id !== session.id);
+    if (activeSessionId === session.id) {
+      showWelcome();
+    } else {
+      renderHistory();
+    }
+    showToast(`Deleted ${session.filename} from local history.`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "Unable to delete this PDF session.");
+    await refreshHistory();
+  } finally {
+    deletingSessionId = null;
+    renderHistory();
+  }
+}
+
 historyList.addEventListener("click", (event) => {
-  const target = event.target instanceof Element
-    ? event.target.closest<HTMLButtonElement>("[data-session-id]")
-    : null;
+  const element = event.target instanceof Element ? event.target : null;
+  const deleteTarget = element?.closest<HTMLButtonElement>("[data-session-delete]");
+  if (deleteTarget) {
+    const session = sessions.find((candidate) => candidate.id === deleteTarget.dataset.sessionDelete);
+    if (session) void removeSession(session);
+    return;
+  }
+
+  const target = element?.closest<HTMLButtonElement>("[data-session-open]");
   if (!target) return;
-  const session = sessions.find((candidate) => candidate.id === target.dataset.sessionId);
+  const session = sessions.find((candidate) => candidate.id === target.dataset.sessionOpen);
   if (session) {
     setMobileSidebarOpen(false);
     void openSession(session);
