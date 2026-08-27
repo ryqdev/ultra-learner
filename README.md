@@ -31,7 +31,7 @@ bun run dev
 - Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
 - Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A selectable PDF.js text layer, box selection mode, and a synchronized AI study companion panel.
-- A provider settings panel with a connection test and named model profiles. Test and chat calls go through the same-origin Bun proxy, so providers do not need browser CORS support. Profiles are stored in this browser's origin-local storage and can be selected across PDF and conversation sessions on the same device; the API key is only forwarded to the configured provider through the local proxy.
+- A guided provider setup with common hosted/local presets, inline endpoint help, API-key visibility control, a connection test, and named model profiles. Test and chat calls go through the same-origin Bun proxy, so providers do not need browser CORS support. Profiles are stored in this browser's origin-local storage and can be selected across PDF and conversation sessions on the same device; the API key is only forwarded to the configured provider through the local proxy.
 - A New session action in the reader starts a fresh AI conversation for the currently open PDF while keeping the document and provider settings in place.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.

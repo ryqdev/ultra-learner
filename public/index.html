@@ -259,32 +259,121 @@
             </div>
             <div class="chat-config-area">
               <button class="chat-config-toggle" id="chat-config-toggle" type="button" aria-expanded="false">
-                <span class="chat-status-dot" aria-hidden="true"></span>
-                <span>Provider settings</span>
+                <span class="chat-status-dot" id="chat-status-dot" aria-hidden="true"></span>
+                <span class="chat-config-toggle-copy">
+                  <span class="chat-config-toggle-label">AI model</span>
+                  <strong id="chat-config-summary">Set up a model to start</strong>
+                </span>
+                <span class="chat-config-toggle-action" id="chat-config-toggle-action">Set up</span>
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
               </button>
               <form class="chat-config-form" id="chat-config-form" hidden>
-                <label for="chat-profile-select">Saved model</label>
-                <div class="chat-profile-row">
-                  <select id="chat-profile-select" aria-label="Select a saved model">
-                    <option value="">New model…</option>
+                <div class="chat-config-intro">
+                  <span class="chat-config-intro-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20"><path d="M10 2.8 16 5v4.7c0 3.6-2.5 6.1-6 7.5-3.5-1.4-6-3.9-6-7.5V5l6-2.2Z"/><path d="m7.2 10 1.8 1.8 3.8-4"/></svg>
+                  </span>
+                  <div>
+                    <strong>Connect your model</strong>
+                    <p>Use a hosted API or a model running on this computer.</p>
+                  </div>
+                </div>
+
+                <section class="chat-config-section" aria-labelledby="chat-profile-heading">
+                  <div class="chat-config-section-heading">
+                    <span class="chat-config-step" aria-hidden="true">1</span>
+                    <div>
+                      <strong id="chat-profile-heading">Choose a saved setup</strong>
+                      <span>Switch between models without retyping details.</span>
+                    </div>
+                  </div>
+                  <div class="chat-profile-row">
+                    <label class="sr-only" for="chat-profile-select">Saved model setup</label>
+                    <select id="chat-profile-select" aria-label="Select a saved model">
+                      <option value="">New model…</option>
+                    </select>
+                    <button class="chat-new-model-button" id="chat-new-model" type="button">New</button>
+                    <button class="chat-delete-button" id="chat-delete-button" type="button" aria-label="Remove selected model" disabled>Remove</button>
+                  </div>
+                </section>
+
+                <section class="chat-config-section" aria-labelledby="chat-provider-heading">
+                  <div class="chat-config-section-heading">
+                    <span class="chat-config-step" aria-hidden="true">2</span>
+                    <div>
+                      <strong id="chat-provider-heading">Choose a provider</strong>
+                      <span>Presets fill in the common endpoint details for you.</span>
+                    </div>
+                  </div>
+                  <label for="chat-provider-preset">Provider preset <span>optional</span></label>
+                  <select id="chat-provider-preset" aria-describedby="chat-provider-help">
+                    <option value="custom">Custom / OpenAI-compatible</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="groq">Groq</option>
+                    <option value="together">Together AI</option>
+                    <option value="ollama">Ollama · local</option>
+                    <option value="lmstudio">LM Studio · local</option>
                   </select>
-                  <button class="chat-delete-button" id="chat-delete-button" type="button" disabled>Delete</button>
-                </div>
-                <label for="chat-profile-name">Model name</label>
-                <input id="chat-profile-name" type="text" autocomplete="off" placeholder="My local model" />
-                <label for="chat-api-key">API key <span>stored on this device</span></label>
-                <input id="chat-api-key" type="password" autocomplete="off" placeholder="sk-…" />
-                <label for="chat-base-url">Base URL</label>
-                <input id="chat-base-url" type="url" spellcheck="false" placeholder="https://api.openai.com/v1" />
-                <label for="chat-model">Model</label>
-                <input id="chat-model" type="text" spellcheck="false" placeholder="gpt-4o-mini" />
+                  <p class="chat-field-help" id="chat-provider-help">Any provider with an OpenAI-compatible chat completions endpoint works here.</p>
+                </section>
+
+                <section class="chat-config-section" aria-labelledby="chat-credentials-heading">
+                  <div class="chat-config-section-heading">
+                    <span class="chat-config-step" aria-hidden="true">3</span>
+                    <div>
+                      <strong id="chat-credentials-heading">Add your credentials</strong>
+                      <span>Your key stays in this browser and is sent through the local proxy.</span>
+                    </div>
+                  </div>
+                  <label for="chat-profile-name">Setup name <span>shown in the saved list</span></label>
+                  <input id="chat-profile-name" type="text" autocomplete="off" placeholder="My OpenAI model" maxlength="80" aria-required="true" />
+                  <label for="chat-api-key">API key <span>stored on this device</span></label>
+                  <div class="chat-secret-input">
+                    <input id="chat-api-key" type="password" autocomplete="off" placeholder="sk-… or local-key" aria-describedby="chat-api-key-help" aria-required="true" />
+                    <button id="chat-api-key-toggle" type="button" aria-label="Show API key" title="Show API key">
+                      <svg class="chat-eye-open" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.8 10s2.5-4.2 7.2-4.2 7.2 4.2 7.2 4.2-2.5 4.2-7.2 4.2S2.8 10 2.8 10Z"/><circle cx="10" cy="10" r="1.8"/></svg>
+                      <svg class="chat-eye-closed" viewBox="0 0 20 20" aria-hidden="true"><path d="m3.5 3.5 13 13M8.3 5.9A7.7 7.7 0 0 1 10 5.8c4.7 0 7.2 4.2 7.2 4.2a13 13 0 0 1-2.1 2.6M5.2 7.1C3.7 8.1 2.8 10 2.8 10s2.5 4.2 7.2 4.2c.8 0 1.5-.1 2.2-.3"/></svg>
+                    </button>
+                  </div>
+                  <p class="chat-field-help" id="chat-api-key-help">For local models, use the key your server expects (some accept any non-empty value).</p>
+                </section>
+
+                <section class="chat-config-section" aria-labelledby="chat-model-heading">
+                  <div class="chat-config-section-heading">
+                    <span class="chat-config-step" aria-hidden="true">4</span>
+                    <div>
+                      <strong id="chat-model-heading">Pick the endpoint and model</strong>
+                      <span>These values decide where requests are sent.</span>
+                    </div>
+                  </div>
+                  <label for="chat-base-url">Base URL</label>
+                  <input id="chat-base-url" type="url" spellcheck="false" placeholder="https://api.openai.com/v1" aria-describedby="chat-base-url-help" aria-required="true" />
+                  <p class="chat-field-help" id="chat-base-url-help">Leave off <code>/chat/completions</code>; Ultra Learner adds it automatically.</p>
+                  <label for="chat-model">Model ID</label>
+                  <input id="chat-model" type="text" spellcheck="false" placeholder="gpt-4o-mini" list="chat-model-options" aria-required="true" />
+                  <datalist id="chat-model-options">
+                    <option value="gpt-4o-mini"></option>
+                    <option value="gpt-4.1-mini"></option>
+                    <option value="claude-3-5-sonnet"></option>
+                    <option value="llama3.2"></option>
+                  </datalist>
+                  <p class="chat-field-help">Use the exact model name shown by your provider.</p>
+                </section>
+
                 <div class="chat-config-actions">
-                  <button class="chat-test-button" id="chat-test-button" type="button">Test connection</button>
-                  <button class="chat-save-button" type="submit">Save model</button>
+                  <button class="chat-test-button" id="chat-test-button" type="button">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8"/></svg>
+                    <span id="chat-test-label">Test connection</span>
+                  </button>
+                  <button class="chat-save-button" type="submit">
+                    Save &amp; use model
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
+                  </button>
                 </div>
-                <p class="chat-config-note">Requests use this local app as a proxy, so the provider does not need browser CORS access.</p>
-                <p class="chat-config-note">Saved models are kept in this browser's local storage and are available across PDF sessions on this device.</p>
+                <div class="chat-config-notes">
+                  <p class="chat-config-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 8V6.5a4.5 4.5 0 0 1 9 0V8m-10 0h11v8h-11V8Z"/></svg><span><strong>Private by default.</strong> The key is saved only in this browser.</span></p>
+                  <p class="chat-config-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5 16 6v4.3c0 3.1-2.2 5.3-6 6.7-3.8-1.4-6-3.6-6-6.7V6l6-2.5Z"/><path d="m7.5 10 1.6 1.6 3.5-3.5"/></svg><span>Requests use the local proxy, so providers do not need browser CORS access.</span></p>
+                </div>
                 <p class="chat-config-status" id="chat-config-status" role="status"></p>
               </form>
             </div>

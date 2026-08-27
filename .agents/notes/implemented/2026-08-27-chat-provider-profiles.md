@@ -8,7 +8,7 @@ The AI guide's provider form only kept one configuration in tab memory, so a lea
 
 ## Decision
 
-The provider form now manages named profiles through a versioned, validated `localStorage` record scoped to the application's origin. A profile contains a user-facing name, API key, Base URL, and model; the active profile is restored when the reader starts and can be changed or deleted without changing PDF sessions. A dedicated same-origin `POST /api/chat/test` route sends one fixed, minimal completion request through the existing Bun proxy. Normal chat requests also default to the proxy, while direct browser transport remains an explicit library-only compatibility option.
+The provider form now manages named profiles through a versioned, validated `localStorage` record scoped to the application's origin. A profile contains a user-facing name, API key, Base URL, and model; the active profile is restored when the reader starts and can be changed or deleted without changing PDF sessions. A dedicated same-origin `POST /api/chat/test` route sends one fixed, minimal completion request through the existing Bun proxy. Normal chat requests also default to the proxy, while direct browser transport remains an explicit library-only compatibility option. The form presents a guided setup flow with provider presets for common hosted and local OpenAI-compatible gateways, inline field help, API-key visibility control, a compact current-model summary, and explicit save/use and remove actions.
 
 ## Alternatives considered
 
@@ -27,3 +27,5 @@ The provider form now manages named profiles through a versioned, validated `loc
 - The connection test can incur a small provider charge and may consume quota; its prompt is intentionally short and fixed.
 - Providers must expose an OpenAI-compatible non-streaming `/chat/completions` endpoint. Provider-specific request formats remain outside this iteration.
 - Corrupt or unsupported local-storage entries are ignored defensively so they cannot prevent the reader from opening.
+- Common provider presets reduce endpoint and model transcription errors; custom OpenAI-compatible URLs remain supported.
+- The setup form is intentionally scroll-constrained so its guidance and controls remain usable inside the resizable study panel and on compact screens.

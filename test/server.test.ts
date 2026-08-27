@@ -35,6 +35,11 @@ describe("web server", () => {
     expect(page).toContain('id="chat-resize-handle"');
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
+    expect(page).toContain('id="chat-provider-preset"');
+    expect(page).toContain('id="chat-api-key-toggle"');
+    expect(page).toContain('id="chat-config-summary"');
+    expect(page).toContain("Save &amp; use model");
+    expect(page).toContain("Ollama · local");
     expect(page).toContain('id="new-session-button"');
     expect(page).toContain('id="text-layer"');
     expect(page).toContain('class="textLayer" id="text-layer" tabindex="0"');
