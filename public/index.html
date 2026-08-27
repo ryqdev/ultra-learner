@@ -240,14 +240,27 @@
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
               </button>
               <form class="chat-config-form" id="chat-config-form" hidden>
-                <label for="chat-api-key">API key <span>kept in this tab</span></label>
+                <label for="chat-profile-select">Saved model</label>
+                <div class="chat-profile-row">
+                  <select id="chat-profile-select" aria-label="Select a saved model">
+                    <option value="">New model…</option>
+                  </select>
+                  <button class="chat-delete-button" id="chat-delete-button" type="button" disabled>Delete</button>
+                </div>
+                <label for="chat-profile-name">Model name</label>
+                <input id="chat-profile-name" type="text" autocomplete="off" placeholder="My local model" />
+                <label for="chat-api-key">API key <span>stored on this device</span></label>
                 <input id="chat-api-key" type="password" autocomplete="off" placeholder="sk-…" />
                 <label for="chat-base-url">Base URL</label>
                 <input id="chat-base-url" type="url" spellcheck="false" placeholder="https://api.openai.com/v1" />
                 <label for="chat-model">Model</label>
                 <input id="chat-model" type="text" spellcheck="false" placeholder="gpt-4o-mini" />
-                <button class="chat-save-button" type="submit">Save settings</button>
+                <div class="chat-config-actions">
+                  <button class="chat-test-button" id="chat-test-button" type="button">Test connection</button>
+                  <button class="chat-save-button" type="submit">Save model</button>
+                </div>
                 <p class="chat-config-note">Requests use this local app as a proxy, so the provider does not need browser CORS access.</p>
+                <p class="chat-config-note">Saved models are kept in this browser's local storage and are available across PDF sessions on this device.</p>
                 <p class="chat-config-status" id="chat-config-status" role="status"></p>
               </form>
             </div>

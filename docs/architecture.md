@@ -23,7 +23,7 @@ Bun server ──→ HTML and CSS
 
 The reader validates the selected file before reading it. PDF.js parses a copy in browser memory; after parsing succeeds, the original bytes are posted to the same-origin session API for local persistence. No account or cloud service is involved, and the server binds to loopback by default. Text PDFs receive a PDF.js `TextLayerBuilder` positioned over the canvas, so browser selection and copying use the source text without changing the visual page. Image-only pages continue to render through the canvas but do not produce text selection context.
 
-The chat panel sends only the user prompt and an explicitly selected, normalized text excerpt to the same-origin `/api/chat/completions` proxy. The browser keeps the API key in JavaScript memory for the current tab; the Bun process forwards it in memory to the configured provider and never writes it to disk. Base URLs are restricted to HTTP(S), the proxy applies request/response size limits and a timeout, and the client uses the common `/chat/completions` contract so self-hosted OpenAI-compatible gateways can be used without browser CORS configuration. A failed network call is returned as an actionable provider or local-proxy error instead of the browser's opaque `Failed to fetch` message.
+The chat panel sends only the user prompt and an explicitly selected, normalized text excerpt to the same-origin `/api/chat/completions` proxy. The provider settings form also sends a minimal prompt to `/api/chat/test` so a learner can verify the key, Base URL, and model before saving or chatting. The browser stores named provider profiles (including their API keys) in origin-scoped `localStorage`, allowing the same list and active model to be reused across PDF and conversation sessions on that device. The Bun process forwards keys in memory to the configured provider and never writes them to disk. Base URLs are restricted to HTTP(S), both proxy routes apply request/response size limits and a timeout, and the client uses the common `/chat/completions` contract so self-hosted OpenAI-compatible gateways can be used without browser CORS configuration. A failed network call is returned as an actionable provider or local-proxy error instead of the browser's opaque `Failed to fetch` message.
 
 The reader toolbar's `New session` action clears the chat messages, selection, and in-flight request while preserving the currently rendered PDF and provider settings. It is a conversation boundary, not a new PDF upload or persisted session record.
 
@@ -41,7 +41,7 @@ The thumbnail rail is a flex-constrained vertical scroll region independent from
 
 ## Bun server
 
-`src/server.ts` serves `public/`, exposes a small health endpoint, bundles the TypeScript browser entry with `Bun.build`, serves the installed PDF.js worker and standard-font assets, and proxies chat requests through `/api/chat/completions`. It also exposes three same-origin session operations: list session summaries, create a session from raw PDF bytes, and retrieve one session's document.
+`src/server.ts` serves `public/`, exposes a small health endpoint, bundles the TypeScript browser entry with `Bun.build`, serves the installed PDF.js worker and standard-font assets, and proxies chat requests through `/api/chat/completions` plus the minimal `/api/chat/test` connection check. It also exposes three same-origin session operations: list session summaries, create a session from raw PDF bytes, and retrieve one session's document.
 
 `src/session-store.ts` owns filesystem access. The default root is `~/.ultra-learner`; each upload creates `sessions/<id>/metadata.json` and `sessions/<id>/document.pdf`. Metadata is versioned and contains the opaque ID, original filename, byte size, and creation time. IDs and filenames are validated at the boundary, stored files are never addressed by user-provided paths, and incomplete or malformed directories are omitted from history. The store is append-only in this iteration: creating another session never overwrites an earlier upload, and deletion is not yet exposed.
 
@@ -55,7 +55,7 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 
 ## Verification boundaries
 
-- Unit tests cover PDF file recognition, display metadata, page constraints, destination resolution, named actions, zoom constraints, progress calculations, selection normalization, and OpenAI-compatible request behavior.
+- Unit tests cover PDF file recognition, display metadata, page constraints, destination resolution, named actions, zoom constraints, progress calculations, selection normalization, OpenAI-compatible request behavior, provider connection tests, and saved-profile persistence rules.
 - Session tests cover metadata validation, filesystem layout, ordering, corrupt-entry handling, upload transport, and history formatting.
 - The merged reader behavior also covers Vim navigation deltas through the reader-state helpers.
 - HTTP tests cover the application shell, browser bundle, health endpoint, session creation/list/retrieval, method boundaries, and static-file containment.

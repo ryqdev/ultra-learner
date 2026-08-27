@@ -2,14 +2,29 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CHAT_PROXY_PATH,
+  CHAT_TEST_MESSAGE,
+  CHAT_TEST_PATH,
   chatCompletionsUrl,
+  createChatTestRequest,
   createChatProxyRequest,
   createChatRequest,
   normalizeBaseUrl,
   parseChatProxyPayload,
+  parseChatTestPayload,
   requestChatCompletion,
+  testChatConnection,
   validateChatConfig,
 } from "../src/lib/chat.ts";
+import {
+  CHAT_PROFILE_STORAGE_KEY,
+  CHAT_PROFILE_STORAGE_VERSION,
+  createChatProfile,
+  parseChatProfileState,
+  removeChatProfile,
+  serializeChatProfileState,
+  upsertChatProfile,
+  type ChatProfileState,
+} from "../src/lib/chat-profiles.ts";
 import {
   createSelectionContext,
   normalizeSelectionText,
@@ -78,6 +93,63 @@ describe("chat configuration and request helpers", () => {
     )).rejects.toThrow("gateway.example");
   });
 
+  test("uses the same-origin proxy by default and can test a provider connection", async () => {
+    const request = createChatTestRequest({
+      apiKey: "secret",
+      baseUrl: "https://gateway.example/v1",
+      model: "study-model",
+    });
+    expect(request.url).toBe(CHAT_TEST_PATH);
+    expect(JSON.parse(String(request.body))).toEqual({
+      baseUrl: "https://gateway.example/v1",
+      model: "study-model",
+    });
+
+    let requestUrl = "";
+    let requestBody: unknown;
+    const answer = await requestChatCompletion(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      [{ role: "user", content: "hello" }],
+      undefined,
+      async (input, init) => {
+        requestUrl = String(input);
+        requestBody = JSON.parse(String(init?.body));
+        return Response.json({ choices: [{ message: { content: "hello" } }] });
+      },
+    );
+    expect(answer).toBe("hello");
+    expect(requestUrl).toBe(CHAT_PROXY_PATH);
+    expect(requestBody).toEqual({
+      baseUrl: "https://gateway.example/v1",
+      model: "study-model",
+      messages: [{ role: "user", content: "hello" }],
+    });
+
+    expect(parseChatTestPayload({ baseUrl: " https://gateway.example/v1/ ", model: " m " }))
+      .toEqual({ baseUrl: "https://gateway.example/v1", model: "m" });
+    expect(() => parseChatTestPayload({ baseUrl: "file:///tmp/model", model: "m" })).toThrow("HTTP or HTTPS");
+
+    const testAnswer = await testChatConnection(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      undefined,
+      async (input, init) => {
+        expect(String(input)).toBe(CHAT_TEST_PATH);
+        expect(JSON.parse(String(init?.body))).toEqual({
+          baseUrl: "https://gateway.example/v1",
+          model: "study-model",
+        });
+        return Response.json({ choices: [{ message: { content: ` ${CHAT_TEST_MESSAGE} ` } }] });
+      },
+    );
+    expect(testAnswer).toBe(CHAT_TEST_MESSAGE);
+
+    await expect(testChatConnection(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      undefined,
+      async () => Response.json({ message: "invalid key" }, { status: 401 }),
+    )).rejects.toThrow("invalid key");
+  });
+
   test("validates untrusted proxy payloads before forwarding them", () => {
     expect(parseChatProxyPayload({
       baseUrl: " https://gateway.example/v1/ ",
@@ -92,6 +164,32 @@ describe("chat configuration and request helpers", () => {
       .toThrow("HTTP or HTTPS");
     expect(() => parseChatProxyPayload({ baseUrl: "https://gateway.example", model: "m", messages: [] }))
       .toThrow("At least one chat message");
+  });
+});
+
+describe("saved chat provider profiles", () => {
+  const config = { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" };
+
+  test("validates, serializes, selects, and removes profiles", () => {
+    expect(CHAT_PROFILE_STORAGE_KEY).toBe("ultra-learner.chat-profiles");
+    const first = createChatProfile({ name: "Gateway", ...config }, () => "profile-one");
+    const second = createChatProfile({ name: "Backup", ...config, model: "backup-model" }, () => "profile-two");
+    let state: ChatProfileState = { version: CHAT_PROFILE_STORAGE_VERSION, activeProfileId: null, profiles: [] };
+    state = upsertChatProfile(state, first);
+    state = upsertChatProfile(state, second);
+    expect(state.activeProfileId).toBe("profile-two");
+    const restored = parseChatProfileState(serializeChatProfileState(state));
+    expect(restored.profiles.map((profile) => profile.name)).toEqual(["Backup", "Gateway"]);
+    expect(removeChatProfile(restored, "profile-two").activeProfileId).toBe("profile-one");
+  });
+
+  test("ignores malformed local storage entries without throwing", () => {
+    expect(parseChatProfileState("not json").profiles).toEqual([]);
+    expect(parseChatProfileState(JSON.stringify({
+      version: CHAT_PROFILE_STORAGE_VERSION,
+      activeProfileId: "bad",
+      profiles: [{ id: "ok", name: "valid", ...config }, { id: "bad", name: "", ...config }],
+    }))).toMatchObject({ activeProfileId: "ok", profiles: [{ id: "ok" }] });
   });
 });
 

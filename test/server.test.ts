@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createAppServer } from "../src/server.ts";
-import { CHAT_PROXY_PATH } from "../src/lib/chat.ts";
+import { CHAT_PROXY_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -62,6 +62,10 @@ describe("web server", () => {
     expect(chatGetResponse.status).toBe(405);
     expect(chatGetResponse.headers.get("allow")).toBe("POST");
 
+    const chatTestGetResponse = await fetch(new URL(CHAT_TEST_PATH, server.url));
+    expect(chatTestGetResponse.status).toBe(405);
+    expect(chatTestGetResponse.headers.get("allow")).toBe("POST");
+
     const pageResponse = await fetch(server.url);
     expect(await pageResponse.text()).toContain('id="new-session-button"');
   });
@@ -106,6 +110,43 @@ describe("web server", () => {
       messages: [{ role: "user", content: "hello" }],
       stream: false,
     });
+  });
+
+  test("tests provider settings with a minimal completion through the proxy", async () => {
+    let upstreamUrl = "";
+    let upstreamInit: RequestInit | undefined;
+    server = createAppServer({
+      port: 0,
+      development: false,
+      sessionRoot: await sessionRoot(),
+      chatFetcher: async (input, init) => {
+        upstreamUrl = String(input);
+        upstreamInit = init;
+        return Response.json({ choices: [{ message: { content: "OK" } }] });
+      },
+    });
+
+    const response = await fetch(new URL(CHAT_TEST_PATH, server.url), {
+      method: "POST",
+      headers: { Authorization: "Bearer tab-secret", "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "study-model" }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ choices: [{ message: { content: "OK" } }] });
+    expect(upstreamUrl).toBe("https://provider.example/v1/chat/completions");
+    expect(JSON.parse(String(upstreamInit?.body))).toEqual({
+      model: "study-model",
+      messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
+      stream: false,
+    });
+    expect(String(upstreamInit?.body)).not.toContain("tab-secret");
+
+    const missingKey = await fetch(new URL(CHAT_TEST_PATH, server.url), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "study-model" }),
+    });
+    expect(missingKey.status).toBe(401);
   });
 
   test("returns actionable proxy errors without exposing provider details", async () => {
