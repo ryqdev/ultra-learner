@@ -75,7 +75,7 @@ svg {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: 84px 1fr 58px;
+  grid-template-rows: 84px 1fr;
 }
 
 .topbar {
@@ -134,15 +134,6 @@ svg {
   letter-spacing: -0.01em;
 }
 
-.brand-copy small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -190,7 +181,7 @@ main {
   justify-content: center;
   align-items: center;
   width: min(100% - 64px, 760px);
-  min-height: calc(100vh - 134px);
+  min-height: calc(100vh - 76px);
   margin: 0 auto;
   padding: 56px 0 64px;
 }
@@ -199,26 +190,6 @@ main {
   width: 100%;
   max-width: 680px;
   margin: 0 auto;
-}
-
-.eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin: 0 0 18px;
-  color: var(--green-bright);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.eyebrow span {
-  display: inline-block;
-  width: 25px;
-  height: 1px;
-  background: var(--green-bright);
 }
 
 .welcome-copy h1 {
@@ -249,14 +220,6 @@ main {
   transform: rotate(-2deg);
 }
 
-.intro {
-  max-width: 560px;
-  margin: 24px 0 30px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.8;
-}
-
 .upload-card {
   position: relative;
   display: grid;
@@ -267,6 +230,7 @@ main {
   align-items: center;
   gap: 8px 15px;
   width: 100%;
+  margin-top: 30px;
   padding: 20px 20px 13px;
   border: 1px dashed rgba(47, 101, 86, 0.42);
   border-radius: 16px;
@@ -397,62 +361,6 @@ main {
   font-size: 8px;
   letter-spacing: 0.02em;
   text-align: center;
-}
-
-.sample-link {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 15px 0 0;
-  padding: 9px 13px;
-  color: var(--muted);
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 10px;
-  text-align: left;
-}
-
-.sample-link:hover {
-  color: var(--ink);
-  background: rgba(255, 253, 248, 0.6);
-}
-
-.sample-link strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.sample-icon {
-  display: grid;
-  place-items: center;
-  width: 27px;
-  height: 27px;
-  color: var(--green-bright);
-  border: 1px solid rgba(47, 101, 86, 0.16);
-  border-radius: 7px;
-}
-
-.sample-icon svg,
-.sample-link .arrow {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.sample-link .arrow {
-  transition: transform 140ms ease;
-}
-
-.sample-link:hover .arrow {
-  transform: translateX(3px);
 }
 
 .history-section {
@@ -637,41 +545,11 @@ main {
   font-size: 15px;
 }
 
-.site-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 17px;
-  color: #858a86;
-  border-top: 1px solid rgba(74, 84, 78, 0.12);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.footer-mark {
-  display: grid;
-  place-items: center;
-  width: 27px;
-  height: 27px;
-  color: var(--green);
-  border: 1px solid rgba(35, 79, 67, 0.25);
-  border-radius: 50%;
-  font-family: Iowan Old Style, Baskerville, "Times New Roman", serif;
-  font-size: 10px;
-  font-weight: 600;
-}
-
 /* Reader */
 .app-shell.is-reading {
   height: 100vh;
   grid-template-rows: 70px minmax(0, 1fr);
   overflow: hidden;
-}
-
-.app-shell.is-reading .site-footer {
-  display: none;
 }
 
 .reader-view {
@@ -2182,7 +2060,6 @@ body.is-dark .primary-button {
 }
 
 body.is-dark .upload-card,
-body.is-dark .sample-link:hover,
 body.is-dark .history-item {
   background: rgba(35, 46, 42, 0.78);
 }
@@ -2228,7 +2105,7 @@ body.is-dark .thumbnail-item.is-active {
 
 @media (max-width: 760px) {
   .app-shell {
-    grid-template-rows: 72px 1fr 52px;
+    grid-template-rows: 72px 1fr;
   }
 
   .topbar {
@@ -2261,14 +2138,6 @@ body.is-dark .thumbnail-item.is-active {
   .upload-card .primary-button {
     width: 100%;
     margin-top: 6px;
-  }
-
-  .site-footer {
-    gap: 10px;
-  }
-
-  .site-footer > span:first-child {
-    display: none;
   }
 
   .app-shell.is-reading {
@@ -2373,21 +2242,9 @@ body.is-dark .thumbnail-item.is-active {
 }
 
 @media (max-width: 410px) {
-  .brand-copy small {
-    display: none;
-  }
-
   .welcome-view {
     width: min(100% - 28px, 560px);
     padding-top: 44px;
-  }
-
-  .intro {
-    font-size: 13px;
-  }
-
-  .sample-link {
-    align-items: start;
   }
 
   .zoom-controls .tool-button:first-child,
@@ -2414,7 +2271,7 @@ body.is-dark .thumbnail-item.is-active {
 /* Workspace navigation */
 .app-shell {
   grid-template-columns: 264px minmax(0, 1fr);
-  grid-template-rows: 76px minmax(0, 1fr) 58px;
+  grid-template-rows: 76px minmax(0, 1fr);
 }
 
 .app-sidebar {
@@ -2459,10 +2316,6 @@ body.is-dark .thumbnail-item.is-active {
 
 .sidebar-brand .brand-copy strong {
   font-size: 18px;
-}
-
-.sidebar-brand .brand-copy small {
-  font-size: 7px;
 }
 
 .app-sidebar-collapse,
@@ -2723,40 +2576,6 @@ body.is-dark .thumbnail-item.is-active {
   height: 14px;
 }
 
-.app-sidebar-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 17px;
-  color: var(--muted);
-  border-top: 1px solid rgba(74, 84, 78, 0.1);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 7px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.sidebar-local-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sidebar-local-indicator i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--green-bright);
-  box-shadow: 0 0 0 3px rgba(47, 101, 86, 0.1);
-}
-
-.sidebar-version {
-  color: #939993;
-  white-space: nowrap;
-}
-
 .app-sidebar-backdrop,
 .mobile-sidebar-toggle {
   display: none;
@@ -2786,14 +2605,6 @@ body.is-dark .thumbnail-item.is-active {
   gap: 2px;
 }
 
-.topbar-context span {
-  color: var(--muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 7px;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
-
 .topbar-context strong {
   max-width: min(46vw, 480px);
   overflow: hidden;
@@ -2809,11 +2620,6 @@ main {
   grid-column: 2;
   grid-row: 2;
   min-width: 0;
-}
-
-.site-footer {
-  grid-column: 2;
-  grid-row: 3;
 }
 
 .app-shell.is-reading {
@@ -2842,8 +2648,7 @@ main {
 .app-shell.sidebar-collapsed .app-sidebar-history-tools > span,
 .app-shell.sidebar-collapsed .app-sidebar .history-item-copy,
 .app-shell.sidebar-collapsed .app-sidebar .history-item-arrow,
-.app-shell.sidebar-collapsed .app-sidebar .history-item-delete,
-.app-shell.sidebar-collapsed .app-sidebar-footer {
+.app-shell.sidebar-collapsed .app-sidebar .history-item-delete {
   display: none;
 }
 
@@ -2950,7 +2755,7 @@ body.is-dark .app-sidebar .history-item:hover:not(.is-busy) {
   .app-shell,
   .app-shell.is-reading {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 72px minmax(0, 1fr) 52px;
+    grid-template-rows: 72px minmax(0, 1fr);
   }
 
   .app-shell.is-reading {
@@ -2984,8 +2789,7 @@ body.is-dark .app-sidebar .history-item:hover:not(.is-busy) {
   }
 
   .topbar,
-  main,
-  .site-footer {
+  main {
     grid-column: 1;
   }
 
@@ -2996,14 +2800,6 @@ body.is-dark .app-sidebar .history-item:hover:not(.is-busy) {
 
   main {
     grid-row: 2;
-  }
-
-  .site-footer {
-    grid-row: 3;
-  }
-
-  .app-shell.is-reading .site-footer {
-    display: none;
   }
 
   .mobile-sidebar-toggle {

@@ -1,4 +1,3 @@
-import { createSamplePdf } from "./sample.ts";
 import { ChatPanelController } from "./chat-panel.ts";
 import { requiredElement } from "./dom.ts";
 import { PdfReaderController } from "./pdf-reader.ts";
@@ -31,11 +30,9 @@ const sidebarRefresh = requiredElement<HTMLButtonElement>("sidebar-refresh");
 const topbarTitle = requiredElement("topbar-title");
 const welcomeView = requiredElement("welcome-view");
 const readerView = requiredElement("reader-view");
-const siteFooter = requiredElement("site-footer");
 const dropZone = requiredElement("drop-zone");
 const fileInput = requiredElement<HTMLInputElement>("file-input");
 const chooseButton = requiredElement<HTMLButtonElement>("choose-button");
-const sampleButton = requiredElement<HTMLButtonElement>("sample-button");
 const errorChooseButton = requiredElement<HTMLButtonElement>("error-choose-button");
 const themeButton = requiredElement<HTMLButtonElement>("theme-button");
 const sidebarToggle = requiredElement<HTMLButtonElement>("sidebar-toggle");
@@ -165,10 +162,9 @@ function showWelcome(): void {
   appShell.classList.remove("is-reading");
   welcomeView.hidden = false;
   readerView.hidden = true;
-  siteFooter.hidden = false;
   setMobileSidebarOpen(false);
   setLibraryActive(true);
-  setTopbarTitle("Library");
+  setTopbarTitle("");
   document.title = "Ultra Learner — PDF Reader";
   void refreshHistory();
 }
@@ -343,7 +339,6 @@ function showReader(title = "Reading"): void {
   appShell.classList.add("is-reading");
   welcomeView.hidden = true;
   readerView.hidden = false;
-  siteFooter.hidden = true;
   setMobileSidebarOpen(false);
   setLibraryActive(false);
   setTopbarTitle(title);
@@ -369,16 +364,8 @@ function chooseFile(): void {
   fileInput.click();
 }
 
-async function openSample(): Promise<void> {
-  activeSessionId = null;
-  showReader("The Shape of Attention");
-  const sample = createSamplePdf();
-  await reader.loadPdf(sample, "The Shape of Attention.pdf", sample.byteLength);
-}
-
 chooseButton.addEventListener("click", chooseFile);
 errorChooseButton.addEventListener("click", chooseFile);
-sampleButton.addEventListener("click", () => void openSample());
 sidebarNewChat.addEventListener("click", () => {
   setMobileSidebarOpen(false);
   startNewSession();

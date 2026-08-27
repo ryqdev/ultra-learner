@@ -27,7 +27,6 @@
             </span>
             <span class="brand-copy">
               <strong>Ultra Learner</strong>
-              <small>Read with intention</small>
             </span>
           </a>
           <button class="app-sidebar-collapse" id="app-sidebar-collapse" type="button" aria-label="Collapse navigation" aria-expanded="true" title="Collapse navigation">
@@ -65,10 +64,6 @@
           </section>
         </div>
 
-        <div class="app-sidebar-footer">
-          <span class="sidebar-local-indicator"><i aria-hidden="true"></i>Local library</span>
-          <span class="sidebar-version">On this device</span>
-        </div>
       </aside>
 
       <div class="app-sidebar-backdrop" id="app-sidebar-backdrop" hidden></div>
@@ -79,8 +74,7 @@
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13m-13 4.5h13m-13 4.5h13" /></svg>
           </button>
           <div class="topbar-context" aria-live="polite">
-            <span>Workspace</span>
-            <strong id="topbar-title">Library</strong>
+            <strong id="topbar-title"></strong>
           </div>
         </div>
 
@@ -94,12 +88,7 @@
       <main>
         <section class="welcome-view" id="welcome-view" aria-labelledby="welcome-title">
           <div class="welcome-copy">
-            <p class="eyebrow"><span></span>A focused space for deep reading</p>
             <h1 id="welcome-title">Make every page<br /><em>count.</em></h1>
-            <p class="intro">
-              Bring your PDF into a quiet, considered reading space. No accounts, no cloud,
-              no distractions—your library stays on this device.
-            </p>
 
             <div class="upload-card" id="drop-zone">
               <input id="file-input" type="file" accept="application/pdf,.pdf" hidden />
@@ -116,15 +105,6 @@
               </button>
               <p class="upload-note">PDF only · Up to 100 MB · Saved locally in ~/.ultra-learner</p>
             </div>
-
-            <button class="sample-link" id="sample-button" type="button">
-              <span class="sample-icon" aria-hidden="true">
-                <svg viewBox="0 0 20 20"><path d="M5 2.5h7l3 3v12H5v-15Z"/><path d="M12 2.5v3h3M7.5 10h5m-5 3h4"/></svg>
-              </span>
-              <span><strong>Not ready with a PDF?</strong> Open the sample field guide</span>
-              <svg class="arrow" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 9h11m-4-4 4 4-4 4"/></svg>
-            </button>
-
           </div>
 
         </section>
@@ -406,11 +386,6 @@
         </section>
       </main>
 
-      <footer class="site-footer" id="site-footer">
-        <span>Built for curious minds.</span>
-        <span class="footer-mark">UL</span>
-        <span>Your files stay local.</span>
-      </footer>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

@@ -30,7 +30,22 @@ describe("web server", () => {
     expect(pageResponse.status).toBe(200);
     expect(pageResponse.headers.get("content-type")).toContain("text/html");
     expect(page).toContain("Ultra Learner");
-    expect(page).not.toContain("Stays on this device");
+    for (const removedCopy of [
+      "A focused space for deep reading",
+      "Bring your PDF into a quiet, considered reading space",
+      "Not ready with a PDF?",
+      "Local library",
+      "On this device",
+      "Built for curious minds.",
+      "Your files stay local.",
+      "Read with intention",
+      ">Workspace<",
+      'id="topbar-title">Library',
+    ]) {
+      expect(page).not.toContain(removedCopy);
+    }
+    expect(page).not.toContain('id="sample-button"');
+    expect(page).not.toContain('id="site-footer"');
     expect(page).toContain("Choose PDF");
     expect(page).toContain('id="chat-panel"');
     expect(page).toContain('id="chat-resize-handle"');
