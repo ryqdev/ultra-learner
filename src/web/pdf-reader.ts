@@ -178,7 +178,7 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = false;
     this.elements.readerError.hidden = true;
     this.elements.canvasFrame.hidden = true;
-    this.elements.readerView.classList.toggle("sidebar-hidden", window.matchMedia("(max-width: 760px)").matches);
+    this.elements.readerView.classList.toggle("sidebar-hidden", window.matchMedia("(max-width: 1180px)").matches);
   }
 
   public async loadPdf(data: Uint8Array, filename: string, fileSize: number): Promise<boolean> {

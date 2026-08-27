@@ -24,7 +24,7 @@ bun run dev
 ## Current experience
 
 - Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
-- A local reading history: each uploaded PDF becomes an immutable session in `~/.ultra-learner/sessions` and can be reopened from the home screen.
+- A ChatGPT-style workspace sidebar with a local reading history: each uploaded PDF becomes an immutable session in `~/.ultra-learner/sessions` and can be reopened from the persistent Recents list.
 - Browser-owned PDF parsing and rendering; the Bun server only receives uploaded bytes to persist them on the same device.
 - Scrollable page thumbnails, previous/next controls, direct page entry with a visible page count, reading progress, and Vim-friendly keyboard navigation (`j`/`k` scroll and turn the page at the matching edge, `d`/`u` page).
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.

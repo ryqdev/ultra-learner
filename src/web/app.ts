@@ -20,6 +20,15 @@ import type { SelectionSource } from "../lib/selection.ts";
 import type { SessionSummary } from "../lib/sessions.ts";
 
 const appShell = requiredElement("app-shell");
+const appSidebar = requiredElement("app-sidebar");
+const appSidebarCollapse = requiredElement<HTMLButtonElement>("app-sidebar-collapse");
+const appSidebarToggle = requiredElement<HTMLButtonElement>("app-sidebar-toggle");
+const appSidebarBackdrop = requiredElement("app-sidebar-backdrop");
+const sidebarNewChat = requiredElement<HTMLButtonElement>("sidebar-new-chat");
+const sidebarOpenPdf = requiredElement<HTMLButtonElement>("sidebar-open-pdf");
+const sidebarLibrary = requiredElement<HTMLButtonElement>("sidebar-library");
+const sidebarRefresh = requiredElement<HTMLButtonElement>("sidebar-refresh");
+const topbarTitle = requiredElement("topbar-title");
 const welcomeView = requiredElement("welcome-view");
 const readerView = requiredElement("reader-view");
 const siteFooter = requiredElement("site-footer");
@@ -57,6 +66,7 @@ let chatResizePointerId: number | null = null;
 let chatResizeStart: { pointerX: number; panelWidth: number } | null = null;
 let sessions: SessionSummary[] = [];
 let openingSessionId: string | null = null;
+let activeSessionId: string | null = null;
 
 function showToast(message: string): void {
   toast.textContent = message;
@@ -65,6 +75,52 @@ function showToast(message: string): void {
   toastTimer = window.setTimeout(() => {
     toast.hidden = true;
   }, 3200);
+}
+
+function isCompactSidebar(): boolean {
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+
+function setMobileSidebarOpen(open: boolean): void {
+  const compact = isCompactSidebar();
+  const shouldOpen = open && compact;
+  if (compact) appShell.classList.remove("sidebar-collapsed");
+  appShell.classList.toggle("sidebar-open", shouldOpen);
+  appSidebarToggle.setAttribute("aria-expanded", String(shouldOpen));
+  appSidebarToggle.setAttribute("aria-label", shouldOpen ? "Close workspace navigation" : "Open workspace navigation");
+  appSidebarToggle.title = shouldOpen ? "Close workspace navigation" : "Open workspace navigation";
+  appSidebarBackdrop.hidden = !shouldOpen;
+  appSidebar.inert = compact && !shouldOpen;
+  if (compact) {
+    appSidebar.setAttribute("aria-hidden", String(!shouldOpen));
+  } else {
+    appSidebar.removeAttribute("aria-hidden");
+  }
+  document.body.classList.toggle("sidebar-drawer-open", shouldOpen);
+}
+
+function setSidebarCollapsed(collapsed: boolean): void {
+  if (isCompactSidebar()) {
+    setMobileSidebarOpen(!collapsed);
+    return;
+  }
+  appShell.classList.toggle("sidebar-collapsed", collapsed);
+  appSidebarCollapse.setAttribute("aria-expanded", String(!collapsed));
+  appSidebarCollapse.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
+  appSidebarCollapse.title = collapsed ? "Expand navigation" : "Collapse navigation";
+}
+
+function setTopbarTitle(title: string): void {
+  topbarTitle.textContent = title;
+}
+
+function setLibraryActive(active: boolean): void {
+  sidebarLibrary.classList.toggle("is-active", active);
+  if (active) {
+    sidebarLibrary.setAttribute("aria-current", "page");
+  } else {
+    sidebarLibrary.removeAttribute("aria-current");
+  }
 }
 
 const chat = new ChatPanelController();
@@ -106,10 +162,14 @@ const reader = new PdfReaderController(
 function showWelcome(): void {
   reader.reset();
   fileInput.value = "";
+  activeSessionId = null;
   appShell.classList.remove("is-reading");
   welcomeView.hidden = false;
   readerView.hidden = true;
   siteFooter.hidden = false;
+  setMobileSidebarOpen(false);
+  setLibraryActive(true);
+  setTopbarTitle("Library");
   document.title = "Ultra Learner — PDF Reader";
   void refreshHistory();
 }
@@ -121,6 +181,10 @@ function historyItem(session: SessionSummary): HTMLButtonElement {
   button.dataset.sessionId = session.id;
   button.disabled = openingSessionId !== null;
   button.setAttribute("aria-label", `Open ${session.filename}`);
+  if (activeSessionId === session.id) {
+    button.classList.add("is-active");
+    button.setAttribute("aria-current", "page");
+  }
 
   const icon = document.createElement("span");
   icon.className = "history-item-icon";
@@ -179,14 +243,18 @@ async function openSession(session: SessionSummary): Promise<void> {
   renderHistory();
   try {
     const data = await loadSessionPdf(session);
-    showReader();
-    await reader.loadPdf(data, session.filename, session.fileSize);
+    showReader(session.filename);
+    const loaded = await reader.loadPdf(data, session.filename, session.fileSize);
+    if (loaded) {
+      activeSessionId = session.id;
+      setTopbarTitle(session.filename);
+    }
   } catch (error) {
     showToast(error instanceof Error ? error.message : "Unable to open this PDF session.");
     await refreshHistory();
   } finally {
     openingSessionId = null;
-    if (!welcomeView.hidden) renderHistory();
+    renderHistory();
   }
 }
 
@@ -196,34 +264,52 @@ historyList.addEventListener("click", (event) => {
     : null;
   if (!target) return;
   const session = sessions.find((candidate) => candidate.id === target.dataset.sessionId);
-  if (session) void openSession(session);
+  if (session) {
+    setMobileSidebarOpen(false);
+    void openSession(session);
+  }
 });
 
 async function openUploadedFile(file: File): Promise<void> {
+  activeSessionId = null;
+  setTopbarTitle(file.name);
+  renderHistory();
   await reader.openFile(file, {
     persist: async (data) => {
       const session = await saveSession(file, data);
       sessions = [session, ...sessions];
+      activeSessionId = session.id;
+      setTopbarTitle(session.filename);
+      renderHistory();
       showToast("PDF saved to your local history.");
       return "Saved locally";
     },
   });
 }
 
-function showReader(): void {
+function showReader(title = "Reading"): void {
   chat.resetConversation();
   appShell.classList.add("is-reading");
   welcomeView.hidden = true;
   readerView.hidden = false;
   siteFooter.hidden = true;
+  setMobileSidebarOpen(false);
+  setLibraryActive(false);
+  setTopbarTitle(title);
   reader.showReader();
   window.requestAnimationFrame(fitChatPanelWidth);
 }
 
 function startNewSession(): void {
-  if (!reader.documentLoaded) return;
+  if (!reader.documentLoaded) {
+    showWelcome();
+    showToast("Choose a PDF to start a new chat.");
+    window.requestAnimationFrame(() => chooseButton.focus());
+    return;
+  }
   setChatCollapsed(false);
   chat.startNewSession();
+  setTopbarTitle("New chat");
   showToast("Started a new conversation for this PDF.");
 }
 
@@ -233,7 +319,8 @@ function chooseFile(): void {
 }
 
 async function openSample(): Promise<void> {
-  showReader();
+  activeSessionId = null;
+  showReader("The Shape of Attention");
   const sample = createSamplePdf();
   await reader.loadPdf(sample, "The Shape of Attention.pdf", sample.byteLength);
 }
@@ -243,6 +330,26 @@ newFileButton.addEventListener("click", chooseFile);
 errorChooseButton.addEventListener("click", chooseFile);
 sampleButton.addEventListener("click", () => void openSample());
 newSessionButton.addEventListener("click", startNewSession);
+sidebarNewChat.addEventListener("click", () => {
+  setMobileSidebarOpen(false);
+  startNewSession();
+});
+sidebarOpenPdf.addEventListener("click", () => {
+  setMobileSidebarOpen(false);
+  chooseFile();
+});
+sidebarLibrary.addEventListener("click", () => showWelcome());
+sidebarRefresh.addEventListener("click", () => void refreshHistory());
+appSidebarCollapse.addEventListener("click", () => {
+  const collapsed = appShell.classList.contains("sidebar-collapsed");
+  setSidebarCollapsed(!collapsed);
+  window.setTimeout(refreshReaderLayout, 200);
+});
+appSidebarToggle.addEventListener("click", () => {
+  const open = appShell.classList.contains("sidebar-open");
+  setMobileSidebarOpen(!open);
+});
+appSidebarBackdrop.addEventListener("click", () => setMobileSidebarOpen(false));
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   if (file) {
@@ -391,6 +498,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && appShell.classList.contains("sidebar-open")) {
+    setMobileSidebarOpen(false);
+    appSidebarToggle.focus();
+    return;
+  }
   if (!reader.documentLoaded || isEditableTarget(event.target)) return;
   const action = readerKeyboardAction(event.key, event);
   if (action === "close-sidebar") {
@@ -404,6 +516,14 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => window.requestAnimationFrame(fitChatPanelWidth));
+
+window.addEventListener("resize", () => {
+  if (isCompactSidebar()) {
+    if (!appShell.classList.contains("sidebar-open")) setMobileSidebarOpen(false);
+    return;
+  }
+  setMobileSidebarOpen(false);
+});
 
 window.addEventListener("beforeunload", () => reader.destroy());
 

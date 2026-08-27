@@ -8,7 +8,7 @@ Uploaded documents disappeared when the tab closed, so a learner could not retur
 
 ## Decision
 
-Each successfully parsed user upload creates an immutable local session through the loopback Bun server. The default storage root is `~/.ultra-learner`; every session has an opaque ID and owns a directory under `sessions/` containing the original bytes as `document.pdf` and versioned `metadata.json`. Metadata records the ID, source filename, byte size, and creation time. The home screen lists valid sessions newest-first and retrieves the stored PDF through an ID-based endpoint when the learner reopens one. The generated sample remains ephemeral and does not enter history.
+Each successfully parsed user upload creates an immutable local session through the loopback Bun server. The default storage root is `~/.ultra-learner`; every session has an opaque ID and owns a directory under `sessions/` containing the original bytes as `document.pdf` and versioned `metadata.json`. Metadata records the ID, source filename, byte size, and creation time. The application exposes valid sessions newest-first in a persistent ChatGPT-style workspace sidebar, including while the home screen is visible, and retrieves the stored PDF through an ID-based endpoint when the learner reopens one. The generated sample remains ephemeral and does not enter history.
 
 The browser continues to own PDF parsing and rendering. It validates the file at entry, keeps the original byte array for persistence, and gives PDF.js a copy because the worker may transfer its input buffer. Persistence starts only after PDF.js successfully opens the document, so rejected candidates do not leave history entries. The server validates size, filename, PDF header, opaque IDs, metadata, regular-file boundaries, and stored byte size. Incomplete or corrupt directories are ignored rather than breaking the whole history.
 
@@ -28,4 +28,5 @@ The browser continues to own PDF parsing and rendering. It validates the file at
 - Repeated uploads intentionally create separate sessions, even when filenames or bytes match.
 - Disk use grows until a future deletion or retention feature is introduced.
 - Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral.
+- The workspace sidebar is a presentation and navigation layer over the same session API; collapsing it or opening it as a mobile drawer does not alter stored sessions.
 - The version field gives future migrations an explicit compatibility boundary; unsupported, malformed, symlinked, incomplete, or size-mismatched entries are hidden from history.

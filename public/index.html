@@ -16,19 +16,77 @@
     <noscript>Ultra Learner needs JavaScript to render PDF documents.</noscript>
 
     <div class="app-shell" id="app-shell">
+      <aside class="app-sidebar" id="app-sidebar" aria-label="Workspace navigation">
+        <div class="app-sidebar-header">
+          <a class="brand sidebar-brand" href="/" aria-label="Ultra Learner home">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 36 36" role="img">
+                <path d="M9 7.5h11.5c3.6 0 6.5 2.9 6.5 6.5v14.5H15.5A6.5 6.5 0 0 1 9 22V7.5Z" />
+                <path d="M15 7.5v14c0 3.9 3.1 7 7 7" />
+              </svg>
+            </span>
+            <span class="brand-copy">
+              <strong>Ultra Learner</strong>
+              <small>Read with intention</small>
+            </span>
+          </a>
+          <button class="app-sidebar-collapse" id="app-sidebar-collapse" type="button" aria-label="Collapse navigation" aria-expanded="true" title="Collapse navigation">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5 12.5 10 7 15.5M12.5 4.5 18 10l-5.5 5.5" /></svg>
+          </button>
+        </div>
+
+        <div class="app-sidebar-body">
+          <div class="app-sidebar-actions">
+            <button class="sidebar-primary-action" id="sidebar-new-chat" type="button" aria-label="Start a new chat">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 15.5h3l7.8-7.8a2.1 2.1 0 0 0-3-3l-7.8 7.8v3Z"/><path d="m11.5 5.5 3 3M4.5 18h11" /></svg>
+              <span>New chat</span>
+            </button>
+            <button class="sidebar-secondary-action" id="sidebar-open-pdf" type="button" aria-label="Open a PDF">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 5.5h5l1.7 2h4.3v8.5h-11v-10.5Z"/><path d="M10 11v4m-2-2 2 2 2-2" /></svg>
+              <span>Open PDF</span>
+            </button>
+          </div>
+
+          <nav class="app-sidebar-nav" aria-label="Library navigation">
+            <button class="sidebar-nav-item is-active" id="sidebar-library" type="button" aria-label="Open library" aria-current="page">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 4.5h3.2c1.1 0 2 .9 2 2v9h-3.2c-1.1 0-2-.9-2-2v-9Z"/><path d="M10 6.5c0-1.1.9-2 2-2h3.5v9c0 1.1-.9 2-2 2H10m0-9v9" /></svg>
+              <span>Library</span>
+            </button>
+          </nav>
+
+          <section class="app-sidebar-history" aria-labelledby="history-title">
+            <div class="app-sidebar-history-heading">
+              <h2 id="history-title">Recents</h2>
+              <div class="app-sidebar-history-tools">
+                <span id="history-count" hidden></span>
+                <button class="sidebar-refresh" id="sidebar-refresh" type="button" aria-label="Refresh recent sessions" title="Refresh recent sessions">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7.5A6.5 6.5 0 1 0 17 12"/><path d="M16 3.5v4h-4" /></svg>
+                </button>
+              </div>
+            </div>
+            <p class="history-status" id="history-status" role="status">Loading previous sessions…</p>
+            <div class="history-list" id="history-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <div class="app-sidebar-footer">
+          <span class="sidebar-local-indicator"><i aria-hidden="true"></i>Local library</span>
+          <span class="sidebar-version">On this device</span>
+        </div>
+      </aside>
+
+      <div class="app-sidebar-backdrop" id="app-sidebar-backdrop" hidden></div>
+
       <header class="topbar">
-        <a class="brand" href="/" aria-label="Ultra Learner home">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 36 36" role="img">
-              <path d="M9 7.5h11.5c3.6 0 6.5 2.9 6.5 6.5v14.5H15.5A6.5 6.5 0 0 1 9 22V7.5Z" />
-              <path d="M15 7.5v14c0 3.9 3.1 7 7 7" />
-            </svg>
-          </span>
-          <span class="brand-copy">
-            <strong>Ultra Learner</strong>
-            <small>Read with intention</small>
-          </span>
-        </a>
+        <div class="topbar-leading">
+          <button class="mobile-sidebar-toggle" id="app-sidebar-toggle" type="button" aria-label="Open workspace navigation" aria-expanded="false" title="Open workspace navigation">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13m-13 4.5h13m-13 4.5h13" /></svg>
+          </button>
+          <div class="topbar-context" aria-live="polite">
+            <span>Workspace</span>
+            <strong id="topbar-title">Library</strong>
+          </div>
+        </div>
 
         <div class="topbar-actions">
           <span class="privacy-pill">
@@ -75,17 +133,6 @@
               <svg class="arrow" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 9h11m-4-4 4 4-4 4"/></svg>
             </button>
 
-            <section class="history-section" aria-labelledby="history-title">
-              <div class="history-heading">
-                <div>
-                  <p class="history-eyebrow">Local library</p>
-                  <h2 id="history-title">Continue reading</h2>
-                </div>
-                <span id="history-count" hidden></span>
-              </div>
-              <p class="history-status" id="history-status" role="status">Loading previous sessions…</p>
-              <div class="history-list" id="history-list" aria-live="polite"></div>
-            </section>
           </div>
 
           <div class="welcome-art" aria-hidden="true">
