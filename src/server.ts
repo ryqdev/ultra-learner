@@ -482,6 +482,23 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
         }
       }
 
+      const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
+      if (sessionMatch) {
+        if (request.method !== "DELETE") {
+          return new Response("Method not allowed", { status: 405, headers: { Allow: "DELETE" } });
+        }
+        try {
+          await sessionStore.deleteSession(decodeURIComponent(sessionMatch[1] ?? ""));
+          return new Response(null, { status: 204 });
+        } catch (error) {
+          if (error instanceof SessionNotFoundError || error instanceof URIError) {
+            return new Response("Not found", { status: 404 });
+          }
+          console.error(error);
+          return Response.json({ error: "Unable to delete the PDF session." }, { status: 500 });
+        }
+      }
+
       if (request.method !== "GET" && request.method !== "HEAD") {
         return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
       }
