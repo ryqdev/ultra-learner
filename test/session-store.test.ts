@@ -53,6 +53,21 @@ describe("local PDF session store", () => {
     await expect(store.getSessionDocument("../session-01")).rejects.toBeInstanceOf(SessionNotFoundError);
   });
 
+  test("deletes a complete session directory without affecting other sessions", async () => {
+    const root = await temporaryRoot();
+    const ids = ["session-delete", "session-keep"];
+    const store = new SessionStore({ root, createId: () => ids.shift() ?? "unexpected-id" });
+    const deleted = await store.createSession("delete.pdf", pdf);
+    const kept = await store.createSession("keep.pdf", pdf);
+
+    await store.deleteSession(deleted.id);
+
+    expect(await store.listSessions()).toEqual([kept]);
+    await expect(store.getSessionDocument(deleted.id)).rejects.toBeInstanceOf(SessionNotFoundError);
+    await expect(store.deleteSession(deleted.id)).rejects.toBeInstanceOf(SessionNotFoundError);
+    await expect(store.deleteSession("../session-keep")).rejects.toBeInstanceOf(SessionNotFoundError);
+  });
+
   test("omits corrupt or incomplete entries from history", async () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root, createId: () => "valid-session" });

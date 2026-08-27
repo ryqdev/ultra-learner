@@ -425,29 +425,73 @@ main {
 
 .history-item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 11px;
   width: 100%;
-  padding: 10px 11px;
   color: var(--ink);
   border: 1px solid rgba(74, 84, 78, 0.12);
   border-radius: 10px;
   background: rgba(255, 253, 248, 0.5);
-  cursor: pointer;
-  text-align: left;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
-.history-item:hover:not(:disabled) {
+.history-item:hover:not(.is-busy) {
   border-color: rgba(47, 101, 86, 0.3);
   background: rgba(255, 253, 248, 0.88);
   transform: translateX(2px);
 }
 
-.history-item:disabled {
-  cursor: wait;
+.history-item.is-busy {
   opacity: 0.55;
+}
+
+.history-item-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: 11px;
+  padding: 10px 6px 10px 11px;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.history-item-open:disabled,
+.history-item-delete:disabled {
+  cursor: wait;
+}
+
+.history-item-delete {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 6px;
+  padding: 0;
+  color: var(--muted);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.history-item-delete:hover:not(:disabled) {
+  color: var(--coral);
+  background: rgba(231, 130, 105, 0.12);
+}
+
+.history-item-delete svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .history-item-icon {
@@ -2020,7 +2064,7 @@ body.is-dark .history-item {
   background: rgba(35, 46, 42, 0.78);
 }
 
-body.is-dark .history-item:hover:not(:disabled) {
+body.is-dark .history-item:hover:not(.is-busy) {
   background: rgba(42, 55, 50, 0.96);
 }
 
@@ -2457,10 +2501,9 @@ body.is-dark .thumbnail-item.is-active {
 }
 
 .app-sidebar .history-item {
-  grid-template-columns: 25px minmax(0, 1fr) auto;
-  gap: 9px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
   min-height: 48px;
-  padding: 7px 8px;
   border-color: transparent;
   border-radius: 9px;
   background: transparent;
@@ -2468,10 +2511,17 @@ body.is-dark .thumbnail-item.is-active {
   transform: none;
 }
 
-.app-sidebar .history-item:hover:not(:disabled) {
+.app-sidebar .history-item:hover:not(.is-busy) {
   border-color: transparent;
   background: rgba(47, 101, 86, 0.08);
   transform: none;
+}
+
+.app-sidebar .history-item-open {
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 48px;
+  padding: 7px 3px 7px 8px;
 }
 
 .app-sidebar .history-item.is-active {
@@ -2506,15 +2556,24 @@ body.is-dark .thumbnail-item.is-active {
 }
 
 .app-sidebar .history-item-arrow {
-  color: var(--muted);
-  font-size: 13px;
-  opacity: 0;
-  transition: opacity 140ms ease, transform 140ms ease;
+  display: none;
 }
 
-.app-sidebar .history-item:hover .history-item-arrow,
-.app-sidebar .history-item.is-active .history-item-arrow {
+.app-sidebar .history-item-delete {
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  opacity: 0.52;
+}
+
+.app-sidebar .history-item:hover .history-item-delete,
+.app-sidebar .history-item:focus-within .history-item-delete {
   opacity: 1;
+}
+
+.app-sidebar .history-item-delete svg {
+  width: 14px;
+  height: 14px;
 }
 
 .app-sidebar-backdrop,
@@ -2588,7 +2647,8 @@ main {
 .app-shell.sidebar-collapsed .app-sidebar-history-heading h2,
 .app-shell.sidebar-collapsed .app-sidebar-history-tools > span,
 .app-shell.sidebar-collapsed .app-sidebar .history-item-copy,
-.app-shell.sidebar-collapsed .app-sidebar .history-item-arrow {
+.app-shell.sidebar-collapsed .app-sidebar .history-item-arrow,
+.app-shell.sidebar-collapsed .app-sidebar .history-item-delete {
   display: none;
 }
 
@@ -2622,6 +2682,9 @@ main {
 
 .app-shell.sidebar-collapsed .app-sidebar .history-item {
   grid-template-columns: 1fr;
+}
+
+.app-shell.sidebar-collapsed .app-sidebar .history-item-open {
   justify-items: center;
   padding: 7px 4px;
 }
@@ -2645,7 +2708,7 @@ body.is-dark .app-sidebar .history-item {
 }
 
 body.is-dark .sidebar-nav-item:hover,
-body.is-dark .app-sidebar .history-item:hover:not(:disabled) {
+body.is-dark .app-sidebar .history-item:hover:not(.is-busy) {
   background: rgba(47, 101, 86, 0.16);
 }
 

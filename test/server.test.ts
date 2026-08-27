@@ -329,6 +329,14 @@ describe("web server", () => {
     expect(documentResponse.status).toBe(200);
     expect(documentResponse.headers.get("content-type")).toBe("application/pdf");
     expect(new Uint8Array(await documentResponse.arrayBuffer())).toEqual(pdf);
+
+    const deleteResponse = await fetch(new URL(`/api/sessions/${created.id}`, server.url), { method: "DELETE" });
+    expect(deleteResponse.status).toBe(204);
+
+    const emptyListResponse = await fetch(new URL("/api/sessions", server.url));
+    expect(await emptyListResponse.json()).toEqual({ sessions: [] });
+    expect((await fetch(new URL(`/api/sessions/${created.id}/document`, server.url))).status).toBe(404);
+    expect((await fetch(new URL(`/api/sessions/${created.id}`, server.url), { method: "DELETE" })).status).toBe(404);
   });
 
   test("rejects malformed session uploads and inaccessible documents", async () => {
@@ -347,5 +355,10 @@ describe("web server", () => {
 
     const traversalResponse = await fetch(new URL("/api/sessions/%2E%2E%2Fsecret/document", server.url));
     expect(traversalResponse.status).toBe(404);
+
+    const traversalDeleteResponse = await fetch(new URL("/api/sessions/%2E%2E%2Fsecret", server.url), {
+      method: "DELETE",
+    });
+    expect(traversalDeleteResponse.status).toBe(404);
   });
 });

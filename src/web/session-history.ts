@@ -11,6 +11,10 @@ interface SessionCreateResponse {
   error?: unknown;
 }
 
+interface SessionDeleteResponse {
+  error?: unknown;
+}
+
 export type SessionFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function responseError(data: SessionListResponse | SessionCreateResponse, fallback: string): Error {
@@ -53,6 +57,27 @@ export async function loadSessionPdf(
     ? "That PDF session is no longer available."
     : "Unable to open this PDF session.");
   return new Uint8Array(await response.arrayBuffer());
+}
+
+export async function deleteSession(
+  session: SessionSummary,
+  fetcher: SessionFetch = fetch,
+): Promise<void> {
+  const response = await fetcher(`/api/sessions/${encodeURIComponent(session.id)}`, {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  });
+  if (response.ok) return;
+
+  let data: SessionDeleteResponse = {};
+  try {
+    data = await response.json() as SessionDeleteResponse;
+  } catch {
+    // A plain-text or empty error response still receives the useful fallback below.
+  }
+  throw responseError(data, response.status === 404
+    ? "That PDF session is no longer available."
+    : "Unable to delete this PDF session.");
 }
 
 export function formatSessionDate(value: string, locale?: string): string {
