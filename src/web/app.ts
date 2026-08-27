@@ -141,7 +141,6 @@ const reader = new PdfReaderController(
     boxSelection: requiredElement("box-selection"),
     thumbnailList: requiredElement("thumbnail-list"),
     documentTitle: requiredElement("document-title"),
-    documentMeta: requiredElement("document-meta"),
     pageInput: requiredElement<HTMLInputElement>("page-input"),
     pageCount: requiredElement("page-count"),
     previousPage: requiredElement<HTMLButtonElement>("previous-page"),
@@ -259,7 +258,7 @@ async function openSession(session: SessionSummary): Promise<void> {
   try {
     const data = await loadSessionPdf(session);
     showReader(session.filename);
-    const loaded = await reader.loadPdf(data, session.filename, session.fileSize);
+    const loaded = await reader.loadPdf(data, session.filename);
     if (loaded) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
@@ -341,7 +340,6 @@ async function openUploadedFile(file: File): Promise<void> {
       setTopbarTitle(session.filename);
       renderHistory();
       showToast("PDF saved to your local history.");
-      return "Saved locally";
     },
   });
 }

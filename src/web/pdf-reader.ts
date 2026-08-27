@@ -11,7 +11,7 @@ import {
 } from "pdfjs-dist";
 import { TextLayerBuilder } from "pdfjs-dist/web/pdf_viewer.mjs";
 
-import { documentTitle, formatFileSize, pdfFileValidationError } from "../lib/files.ts";
+import { documentTitle, pdfFileValidationError } from "../lib/files.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -46,7 +46,6 @@ export interface PdfReaderElements {
   boxSelection: HTMLElement;
   thumbnailList: HTMLElement;
   documentTitle: HTMLElement;
-  documentMeta: HTMLElement;
   pageInput: HTMLInputElement;
   pageCount: HTMLElement;
   previousPage: HTMLButtonElement;
@@ -66,14 +65,13 @@ export interface PdfReaderCallbacks {
 }
 
 export interface OpenFileOptions {
-  persist?: (data: Uint8Array) => Promise<string | void>;
+  persist?: (data: Uint8Array) => Promise<void>;
 }
 
 interface ReaderState {
   document: PDFDocumentProxy | null;
   loadingTask: PDFDocumentLoadingTask | null;
   filename: string;
-  fileSize: number;
   page: number;
   zoom: number;
   fitScale: number;
@@ -108,7 +106,6 @@ export class PdfReaderController {
     document: null,
     loadingTask: null,
     filename: "",
-    fileSize: 0,
     page: 1,
     zoom: 1,
     fitScale: 1,
@@ -157,7 +154,6 @@ export class PdfReaderController {
     this.openFileVersion += 1;
     this.cancelCurrentWork();
     this.state.filename = "";
-    this.state.fileSize = 0;
     this.state.page = 1;
     this.state.zoom = 1;
     this.state.fitScale = 1;
@@ -176,7 +172,6 @@ export class PdfReaderController {
     this.elements.pageSurface.style.width = "";
     this.elements.pageSurface.style.height = "";
     this.elements.documentTitle.textContent = "Document";
-    this.elements.documentMeta.textContent = "PDF document";
     this.setControlsLoading();
     this.clearSelection();
   }
@@ -188,12 +183,11 @@ export class PdfReaderController {
     this.elements.readerView.classList.toggle("sidebar-hidden", window.matchMedia("(max-width: 1180px)").matches);
   }
 
-  public async loadPdf(data: Uint8Array, filename: string, fileSize: number): Promise<boolean> {
+  public async loadPdf(data: Uint8Array, filename: string): Promise<boolean> {
     this.showReader();
     this.setLoading("Parsing PDF…");
     this.setControlsLoading();
     this.elements.documentTitle.textContent = documentTitle(filename);
-    this.elements.documentMeta.textContent = `${formatFileSize(fileSize)} · Validating PDF…`;
     this.cancelCurrentWork();
     const loadVersion = ++this.state.renderVersion;
 
@@ -223,12 +217,10 @@ export class PdfReaderController {
       this.linkService.setDocument(pdf);
       this.state.loadingTask = loadingTask;
       this.state.filename = filename;
-      this.state.fileSize = fileSize;
       this.state.page = 1;
       this.state.zoom = 1;
       this.state.optionalContentConfigPromise = pdf.getOptionalContentConfig({ intent: "display" });
       this.elements.documentTitle.textContent = documentTitle(filename);
-      this.elements.documentMeta.textContent = `${pdf.numPages} ${pdf.numPages === 1 ? "page" : "pages"} · ${formatFileSize(fileSize)} · Local only`;
       this.elements.pageCount.textContent = String(pdf.numPages);
       this.elements.pageInput.max = String(pdf.numPages);
       document.title = `${documentTitle(filename)} — Ultra Learner`;
@@ -339,7 +331,6 @@ export class PdfReaderController {
     this.setLoading("Reading local file…");
     this.setControlsLoading();
     this.elements.documentTitle.textContent = documentTitle(file.name);
-    this.elements.documentMeta.textContent = `${formatFileSize(file.size)} · Preparing local session…`;
     this.callbacks.onFileAccepted();
 
     let data: Uint8Array;
@@ -353,17 +344,13 @@ export class PdfReaderController {
 
     // PDF.js may transfer the supplied buffer to its worker, so retain the
     // original bytes for the local session write after parsing succeeds.
-    const loaded = await this.loadPdf(data.slice(), file.name, file.size);
+    const loaded = await this.loadPdf(data.slice(), file.name);
     if (!loaded || openVersion !== this.openFileVersion) return;
 
     if (options.persist) {
       try {
-        const persistedLabel = await options.persist(data);
-        if (persistedLabel) {
-          this.elements.documentMeta.textContent = `${this.pageCount} ${this.pageCount === 1 ? "page" : "pages"} · ${formatFileSize(file.size)} · ${persistedLabel}`;
-        }
+        await options.persist(data);
       } catch (error) {
-        this.elements.documentMeta.textContent = `${this.pageCount} ${this.pageCount === 1 ? "page" : "pages"} · ${formatFileSize(file.size)} · Current tab only`;
         this.callbacks.onToast(error instanceof Error ? error.message : "Unable to save this PDF to your history.");
       }
     }

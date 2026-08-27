@@ -749,10 +749,7 @@ main {
 }
 
 .document-details {
-  display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .document-details strong {
@@ -760,15 +757,6 @@ main {
   font-family: Iowan Old Style, Baskerville, "Times New Roman", serif;
   font-size: 15px;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.document-details span {
-  overflow: hidden;
-  color: var(--muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

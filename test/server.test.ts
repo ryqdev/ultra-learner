@@ -68,6 +68,7 @@ describe("web server", () => {
     expect(page).not.toContain("Ask the page.");
     expect(page).toContain('id="text-layer"');
     expect(page).toContain('class="textLayer" id="text-layer" tabindex="0"');
+    expect(page).not.toContain('id="document-meta"');
     expect(page).toContain('id="app-sidebar"');
     expect(page).toContain('id="app-sidebar-toggle"');
     expect(page).toContain('id="sidebar-new-chat"');
