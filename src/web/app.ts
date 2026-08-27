@@ -25,7 +25,6 @@ const appSidebarCollapse = requiredElement<HTMLButtonElement>("app-sidebar-colla
 const appSidebarToggle = requiredElement<HTMLButtonElement>("app-sidebar-toggle");
 const appSidebarBackdrop = requiredElement("app-sidebar-backdrop");
 const sidebarNewChat = requiredElement<HTMLButtonElement>("sidebar-new-chat");
-const sidebarOpenPdf = requiredElement<HTMLButtonElement>("sidebar-open-pdf");
 const sidebarLibrary = requiredElement<HTMLButtonElement>("sidebar-library");
 const sidebarRefresh = requiredElement<HTMLButtonElement>("sidebar-refresh");
 const topbarTitle = requiredElement("topbar-title");
@@ -333,10 +332,6 @@ newSessionButton.addEventListener("click", startNewSession);
 sidebarNewChat.addEventListener("click", () => {
   setMobileSidebarOpen(false);
   startNewSession();
-});
-sidebarOpenPdf.addEventListener("click", () => {
-  setMobileSidebarOpen(false);
-  chooseFile();
 });
 sidebarLibrary.addEventListener("click", () => showWelcome());
 sidebarRefresh.addEventListener("click", () => void refreshHistory());

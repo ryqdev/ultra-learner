@@ -41,6 +41,8 @@ describe("web server", () => {
     expect(page).toContain('id="app-sidebar"');
     expect(page).toContain('id="app-sidebar-toggle"');
     expect(page).toContain('id="sidebar-new-chat"');
+    expect(page).not.toContain('id="sidebar-open-pdf"');
+    expect(page).not.toContain(">Open PDF<");
     expect(page).toContain('id="history-list"');
     expect(page).toContain("~/.ultra-learner");
     expect(page).toContain('id="annotation-layer"');
