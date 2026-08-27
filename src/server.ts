@@ -3,11 +3,14 @@ import { extname, join, normalize, resolve } from "node:path";
 
 import {
   CHAT_PROXY_PATH,
+  CHAT_MODELS_PATH,
   CHAT_TEST_MESSAGE,
   CHAT_TEST_PATH,
   chatCompletionsUrl,
+  chatModelsUrl,
   MAXIMUM_CHAT_REQUEST_SIZE,
   parseChatProxyPayload,
+  parseChatModelsPayload,
   parseChatTestPayload,
   type ChatFetcher,
 } from "./lib/chat.ts";
@@ -42,6 +45,7 @@ const contentTypes: Record<string, string> = {
 class PayloadTooLargeError extends Error {}
 
 const MAXIMUM_CHAT_RESPONSE_SIZE = 2 * 1024 * 1024;
+const MAXIMUM_CHAT_MODELS_RESPONSE_SIZE = 8 * 1024 * 1024;
 const CHAT_PROVIDER_TIMEOUT_MS = 60_000;
 
 async function readBodyBytes(body: ReadableStream<Uint8Array> | null, maximumSize: number): Promise<Uint8Array> {
@@ -106,6 +110,13 @@ async function readResponseText(response: Response, maximumSize: number): Promis
   return new TextDecoder().decode(bytes);
 }
 
+function hasOversizedContentLength(headers: Headers, maximumSize: number): boolean {
+  const value = headers.get("content-length");
+  if (value === null) return false;
+  const size = Number(value);
+  return Number.isFinite(size) && size > maximumSize;
+}
+
 function jsonError(message: string, status: number): Response {
   return Response.json({ error: { message } }, {
     status,
@@ -151,7 +162,12 @@ async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Prom
         Authorization: authorization,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: payload.model, messages: payload.messages, stream: false }),
+      body: JSON.stringify({
+        model: payload.model,
+        messages: payload.messages,
+        stream: false,
+        ...(payload.reasoningEffort ? { reasoning_effort: payload.reasoningEffort } : {}),
+      }),
       signal: controller.signal,
     });
   } catch (error) {
@@ -182,7 +198,12 @@ async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Prom
 async function forwardChatRequest(
   request: Request,
   fetcher: ChatFetcher,
-  payload: { baseUrl: string; model: string; messages: Array<{ role: "system" | "user" | "assistant"; content: string }> },
+  payload: {
+    baseUrl: string;
+    model: string;
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+    reasoningEffort?: string;
+  },
   missingPayloadMessage: string,
 ): Promise<Response> {
   const authorization = bearerToken(request);
@@ -200,7 +221,12 @@ async function forwardChatRequest(
         Authorization: authorization,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: payload.model, messages: payload.messages, stream: false }),
+      body: JSON.stringify({
+        model: payload.model,
+        messages: payload.messages,
+        stream: false,
+        ...(payload.reasoningEffort ? { reasoning_effort: payload.reasoningEffort } : {}),
+      }),
       signal: controller.signal,
     });
   } catch (error) {
@@ -251,8 +277,72 @@ async function testChatProvider(request: Request, fetcher: ChatFetcher): Promise
   return forwardChatRequest(request, fetcher, {
     baseUrl: payload.baseUrl,
     model: payload.model,
+    reasoningEffort: payload.reasoningEffort,
     messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
   }, "Unable to read the model provider response.");
+}
+
+async function listChatModels(request: Request, fetcher: ChatFetcher): Promise<Response> {
+  const authorization = bearerToken(request);
+  if (!authorization) return jsonError("An API key is required.", 401);
+
+  const contentLengthHeader = request.headers.get("content-length");
+  const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
+  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_CHAT_REQUEST_SIZE) {
+    return jsonError("The model list request is too large.", 413);
+  }
+
+  let payload: ReturnType<typeof parseChatModelsPayload>;
+  try {
+    const bytes = await readRequestBytes(request, MAXIMUM_CHAT_REQUEST_SIZE);
+    payload = parseChatModelsPayload(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return jsonError("The model list request is too large.", 413);
+    if (error instanceof Error) return jsonError(error.message, 400);
+    return jsonError("Unable to read the model list request.", 400);
+  }
+
+  const upstreamUrl = chatModelsUrl(payload.baseUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CHAT_PROVIDER_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetcher(upstreamUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: authorization,
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return jsonError("The model provider timed out. Check the provider and try again.", 504);
+    }
+    return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
+  }
+
+  try {
+    if (hasOversizedContentLength(response.headers, MAXIMUM_CHAT_MODELS_RESPONSE_SIZE)) {
+      await response.body?.cancel();
+      return jsonError("The model list response is too large.", 502);
+    }
+    const body = await readResponseText(response, MAXIMUM_CHAT_MODELS_RESPONSE_SIZE);
+    return new Response(body, {
+      status: response.status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    if (controller.signal.aborted) return jsonError("The model provider timed out. Check the provider and try again.", 504);
+    if (error instanceof PayloadTooLargeError) return jsonError("The model list response is too large.", 502);
+    return jsonError("Unable to read the model provider response.", 502);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function safeAssetPath(root: string, pathname: string): string | undefined {
@@ -317,6 +407,13 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
           return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
         }
         return testChatProvider(request, chatFetcher);
+      }
+
+      if (url.pathname === CHAT_MODELS_PATH) {
+        if (request.method !== "POST") {
+          return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
+        }
+        return listChatModels(request, chatFetcher);
       }
 
       if (url.pathname === "/api/sessions") {

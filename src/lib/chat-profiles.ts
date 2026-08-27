@@ -48,6 +48,7 @@ export function validateChatProfile(value: unknown): ChatProfile {
     apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : "",
     baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl : "",
     model: typeof candidate.model === "string" ? candidate.model : "",
+    reasoningEffort: candidate.reasoningEffort,
   });
   return {
     id: profileId(candidate.id),

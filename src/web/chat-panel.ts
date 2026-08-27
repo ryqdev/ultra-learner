@@ -1,9 +1,12 @@
 import {
   DEFAULT_CHAT_CONFIG,
+  fetchChatModels,
   testChatConnection,
   requestChatCompletion,
+  validateChatCredentials,
   validateChatConfig,
   type ChatConfig,
+  type ChatModel,
   type ChatMessage,
 } from "../lib/chat.ts";
 import {
@@ -32,12 +35,16 @@ interface ChatPanelElements {
   statusDot: HTMLElement;
   profileSelect: HTMLSelectElement;
   newModelButton: HTMLButtonElement;
-  profileName: HTMLInputElement;
   providerPreset: HTMLSelectElement;
   apiKey: HTMLInputElement;
   apiKeyToggle: HTMLButtonElement;
   baseUrl: HTMLInputElement;
-  model: HTMLInputElement;
+  fetchModelsButton: HTMLButtonElement;
+  fetchModelsLabel: HTMLElement;
+  modelSelect: HTMLSelectElement;
+  modelHelp: HTMLElement;
+  reasoningEffort: HTMLSelectElement;
+  reasoningHelp: HTMLElement;
   testButton: HTMLButtonElement;
   testLabel: HTMLElement;
   deleteButton: HTMLButtonElement;
@@ -57,17 +64,16 @@ interface ChatPanelElements {
 interface ProviderPreset {
   label: string;
   baseUrl: string;
-  model: string;
   apiKey?: string;
 }
 
 const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
-  openai: { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
-  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
-  together: { label: "Together AI", baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
-  ollama: { label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "llama3.2", apiKey: "ollama" },
-  lmstudio: { label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", model: "local-model", apiKey: "lm-studio" },
+  openai: { label: "OpenAI", baseUrl: "https://api.openai.com/v1" },
+  openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
+  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1" },
+  together: { label: "Together AI", baseUrl: "https://api.together.xyz/v1" },
+  ollama: { label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", apiKey: "ollama" },
+  lmstudio: { label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", apiKey: "lm-studio" },
 };
 
 function profileStorage(): Storage | null {
@@ -99,9 +105,13 @@ export class ChatPanelController {
   private readonly messages: ChatMessage[] = [];
   private config: ChatConfig = { apiKey: "", ...DEFAULT_CHAT_CONFIG };
   private profileState: ChatProfileState = blankProfileState();
+  private models: ChatModel[] = [];
+  private modelsBaseUrl = "";
+  private modelsApiKey = "";
   private selection: SelectionContext | null = null;
   private requestController: AbortController | null = null;
   private testController: AbortController | null = null;
+  private modelsController: AbortController | null = null;
   private configOpen = false;
 
   public constructor() {
@@ -114,12 +124,16 @@ export class ChatPanelController {
       statusDot: requiredElement("chat-status-dot"),
       profileSelect: requiredElement<HTMLSelectElement>("chat-profile-select"),
       newModelButton: requiredElement<HTMLButtonElement>("chat-new-model"),
-      profileName: requiredElement<HTMLInputElement>("chat-profile-name"),
       providerPreset: requiredElement<HTMLSelectElement>("chat-provider-preset"),
       apiKey: requiredElement<HTMLInputElement>("chat-api-key"),
       apiKeyToggle: requiredElement<HTMLButtonElement>("chat-api-key-toggle"),
       baseUrl: requiredElement<HTMLInputElement>("chat-base-url"),
-      model: requiredElement<HTMLInputElement>("chat-model"),
+      fetchModelsButton: requiredElement<HTMLButtonElement>("chat-fetch-models"),
+      fetchModelsLabel: requiredElement("chat-fetch-models-label"),
+      modelSelect: requiredElement<HTMLSelectElement>("chat-model"),
+      modelHelp: requiredElement("chat-model-help"),
+      reasoningEffort: requiredElement<HTMLSelectElement>("chat-reasoning-effort"),
+      reasoningHelp: requiredElement("chat-reasoning-help"),
       testButton: requiredElement<HTMLButtonElement>("chat-test-button"),
       testLabel: requiredElement("chat-test-label"),
       deleteButton: requiredElement<HTMLButtonElement>("chat-delete-button"),
@@ -169,6 +183,12 @@ export class ChatPanelController {
       this.elements.testButton.disabled = false;
       this.elements.testLabel.textContent = "Test connection";
     }
+    if (this.modelsController) {
+      this.modelsController.abort();
+      this.modelsController = null;
+      this.elements.fetchModelsButton.disabled = false;
+      this.elements.fetchModelsLabel.textContent = "Fetch models";
+    }
     this.messages.splice(0);
     this.elements.prompt.value = "";
     this.clearSelection();
@@ -201,14 +221,22 @@ export class ChatPanelController {
     elements.newModelButton.addEventListener("click", () => this.startNewModel());
     elements.providerPreset.addEventListener("change", () => this.applyProviderPreset(elements.providerPreset.value));
     elements.apiKeyToggle.addEventListener("click", () => this.toggleApiKeyVisibility());
-    for (const input of [elements.profileName, elements.apiKey, elements.baseUrl, elements.model]) {
+    for (const input of [elements.apiKey, elements.baseUrl]) {
       input.addEventListener("input", () => {
+        this.invalidateModels();
         this.syncConfigFromForm();
         this.syncProviderPreset();
         this.updateConfigSummary();
         this.updateComposerHint();
       });
     }
+    elements.modelSelect.addEventListener("change", () => this.selectModel(elements.modelSelect.value));
+    elements.reasoningEffort.addEventListener("change", () => {
+      this.syncConfigFromForm();
+      this.updateConfigSummary();
+      this.updateComposerHint();
+    });
+    elements.fetchModelsButton.addEventListener("click", () => void this.fetchModels());
     elements.testButton.addEventListener("click", () => void this.testConfig());
     elements.deleteButton.addEventListener("click", () => this.deleteSelectedProfile());
     elements.clearSelection.addEventListener("click", () => this.clearSelection());
@@ -227,14 +255,16 @@ export class ChatPanelController {
   private saveConfig(): void {
     const { elements } = this;
     try {
+      this.requireFetchedModel();
       const config = validateChatConfig({
         apiKey: elements.apiKey.value,
         baseUrl: elements.baseUrl.value,
-        model: elements.model.value,
+        model: elements.modelSelect.value,
+        reasoningEffort: elements.reasoningEffort.value,
       });
       const profile = createChatProfile({
         id: elements.profileSelect.value || undefined,
-        name: elements.profileName.value.trim() || config.model,
+        name: this.profileState.profiles.find((candidate) => candidate.id === elements.profileSelect.value)?.name ?? config.model,
         ...config,
       });
       this.config = config;
@@ -263,7 +293,12 @@ export class ChatPanelController {
     const active = this.profileState.profiles.find((profile) => profile.id === this.profileState.activeProfileId)
       ?? this.profileState.profiles[0];
     if (active) {
-      this.config = { apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model };
+      this.config = {
+        apiKey: active.apiKey,
+        baseUrl: active.baseUrl,
+        model: active.model,
+        ...(active.reasoningEffort ? { reasoningEffort: active.reasoningEffort } : {}),
+      };
     }
     this.renderProfiles(active?.id);
     this.updateConfigSummary();
@@ -304,15 +339,22 @@ export class ChatPanelController {
     elements.deleteButton.disabled = !elements.profileSelect.value;
     const selected = this.profileState.profiles.find((profile) => profile.id === elements.profileSelect.value);
     if (selected) {
-      elements.profileName.value = selected.name;
       elements.apiKey.value = selected.apiKey;
       elements.baseUrl.value = selected.baseUrl;
-      elements.model.value = selected.model;
+      this.config = {
+        apiKey: selected.apiKey,
+        baseUrl: selected.baseUrl,
+        model: selected.model,
+        ...(selected.reasoningEffort ? { reasoningEffort: selected.reasoningEffort } : {}),
+      };
+      this.setModelCatalog([{
+        id: selected.model,
+        reasoningEfforts: selected.reasoningEffort ? [selected.reasoningEffort] : [],
+      }], selected.baseUrl, selected.apiKey, selected.model, selected.reasoningEffort);
     } else {
-      elements.profileName.value = "";
       elements.apiKey.value = this.config.apiKey;
       elements.baseUrl.value = this.config.baseUrl;
-      elements.model.value = this.config.model;
+      this.invalidateModels();
     }
     this.syncProviderPreset();
     this.resetApiKeyVisibility();
@@ -322,6 +364,7 @@ export class ChatPanelController {
     if (!id) {
       this.config = { apiKey: "", ...DEFAULT_CHAT_CONFIG };
       this.renderProfiles("");
+      this.invalidateModels();
       this.elements.configStatus.textContent = "New setup — choose a provider or enter custom details.";
       this.elements.configStatus.className = "chat-config-status";
       this.updateConfigSummary();
@@ -330,7 +373,12 @@ export class ChatPanelController {
     }
     const profile = this.profileState.profiles.find((candidate) => candidate.id === id);
     if (!profile) return;
-    this.config = { apiKey: profile.apiKey, baseUrl: profile.baseUrl, model: profile.model };
+    this.config = {
+      apiKey: profile.apiKey,
+      baseUrl: profile.baseUrl,
+      model: profile.model,
+      ...(profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}),
+    };
     this.profileState = { ...this.profileState, activeProfileId: profile.id };
     const persisted = this.persistProfiles();
     this.renderProfiles(profile.id);
@@ -356,7 +404,12 @@ export class ChatPanelController {
     const persisted = this.persistProfiles();
     const active = this.profileState.profiles.find((candidate) => candidate.id === this.profileState.activeProfileId);
     this.config = active
-      ? { apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model }
+      ? {
+        apiKey: active.apiKey,
+        baseUrl: active.baseUrl,
+        model: active.model,
+        ...(active.reasoningEffort ? { reasoningEffort: active.reasoningEffort } : {}),
+      }
       : { apiKey: "", ...DEFAULT_CHAT_CONFIG };
     this.renderProfiles(this.profileState.activeProfileId ?? "");
     this.updateConfigSummary();
@@ -378,7 +431,7 @@ export class ChatPanelController {
   private startNewModel(): void {
     this.elements.profileSelect.value = "";
     this.selectProfile("");
-    this.elements.profileName.focus();
+    this.elements.apiKey.focus();
   }
 
   private applyProviderPreset(presetId: string): void {
@@ -386,13 +439,12 @@ export class ChatPanelController {
     if (!preset) return;
     const { elements } = this;
     elements.baseUrl.value = preset.baseUrl;
-    elements.model.value = preset.model;
     if (preset.apiKey && !elements.apiKey.value.trim()) elements.apiKey.value = preset.apiKey;
-    if (!elements.profileName.value.trim()) elements.profileName.value = preset.label;
+    this.invalidateModels();
     this.syncConfigFromForm();
     this.updateConfigSummary();
     this.updateComposerHint();
-    elements.configStatus.textContent = `${preset.label} defaults filled in. Check the model ID, then test the connection.`;
+    elements.configStatus.textContent = `${preset.label} defaults filled in. Fetch its available models to continue.`;
     elements.configStatus.className = "chat-config-status";
   }
 
@@ -401,10 +453,151 @@ export class ChatPanelController {
       this.config = validateChatConfig({
         apiKey: this.elements.apiKey.value,
         baseUrl: this.elements.baseUrl.value,
-        model: this.elements.model.value,
+        model: this.elements.modelSelect.value,
+        reasoningEffort: this.elements.reasoningEffort.value,
       });
     } catch {
       // Keep the last usable config while the form is temporarily incomplete.
+    }
+  }
+
+  private requireFetchedModel(): void {
+    let credentials;
+    try {
+      credentials = validateChatCredentials({
+        apiKey: this.elements.apiKey.value,
+        baseUrl: this.elements.baseUrl.value,
+      });
+    } catch {
+      throw new Error("Fetch the available models before choosing one.");
+    }
+    if (
+      credentials.baseUrl !== this.modelsBaseUrl
+      || credentials.apiKey !== this.modelsApiKey
+      || !this.models.some((model) => model.id === this.elements.modelSelect.value)
+    ) {
+      throw new Error("Fetch the available models before choosing one.");
+    }
+  }
+
+  private invalidateModels(clearFields = true): void {
+    this.modelsController?.abort();
+    this.models = [];
+    this.modelsBaseUrl = "";
+    this.modelsApiKey = "";
+    if (clearFields) this.setModelCatalog([], "", "", "", "");
+  }
+
+  private setModelCatalog(
+    models: ChatModel[],
+    baseUrl: string,
+    apiKey: string,
+    selectedModel = "",
+    selectedEffort = "",
+  ): void {
+    const { elements } = this;
+    this.models = models;
+    this.modelsBaseUrl = baseUrl.trim().replace(/\/+$/, "");
+    this.modelsApiKey = apiKey.trim();
+    elements.modelSelect.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = models.length > 0 ? "Choose a model…" : "Fetch models to choose one…";
+    elements.modelSelect.append(placeholder);
+    for (const model of models) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.id;
+      elements.modelSelect.append(option);
+    }
+    const chosen = models.some((model) => model.id === selectedModel)
+      ? selectedModel
+      : models[0]?.id ?? "";
+    elements.modelSelect.value = chosen;
+    elements.modelSelect.disabled = models.length === 0;
+    this.populateReasoningEfforts(chosen, selectedEffort);
+    if (models.length === 0) {
+      elements.modelHelp.textContent = "Enter your credentials, then fetch the available models.";
+    }
+  }
+
+  private populateReasoningEfforts(modelId: string, selectedEffort = ""): void {
+    const { elements } = this;
+    const model = this.models.find((candidate) => candidate.id === modelId);
+    const efforts = model?.reasoningEfforts ?? [];
+    elements.reasoningEffort.replaceChildren();
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Default (provider controlled)";
+    elements.reasoningEffort.append(defaultOption);
+    for (const effort of efforts) {
+      const option = document.createElement("option");
+      option.value = effort;
+      option.textContent = effort.charAt(0).toUpperCase() + effort.slice(1);
+      elements.reasoningEffort.append(option);
+    }
+    elements.reasoningEffort.value = efforts.includes(selectedEffort) ? selectedEffort : "";
+    elements.reasoningEffort.disabled = !modelId;
+    elements.reasoningHelp.textContent = efforts.length > 0
+      ? `Available for ${modelId}: ${efforts.join(", ")}.`
+      : modelId
+        ? "This model did not advertise reasoning levels; the provider default will be used."
+        : "Choose a model to see its reasoning levels.";
+  }
+
+  private selectModel(modelId: string): void {
+    const previousEffort = this.elements.reasoningEffort.value;
+    this.populateReasoningEfforts(modelId, previousEffort);
+    this.syncConfigFromForm();
+    this.updateConfigSummary();
+    this.updateComposerHint();
+  }
+
+  private async fetchModels(): Promise<void> {
+    if (this.modelsController) return;
+    const { elements } = this;
+    let credentials;
+    try {
+      credentials = validateChatCredentials({ apiKey: elements.apiKey.value, baseUrl: elements.baseUrl.value });
+    } catch (error) {
+      elements.configStatus.textContent = error instanceof Error ? error.message : "Enter an API key and Base URL first.";
+      elements.configStatus.className = "chat-config-status is-error";
+      if (!elements.apiKey.value.trim()) elements.apiKey.focus();
+      else elements.baseUrl.focus();
+      return;
+    }
+
+    const controller = new AbortController();
+    this.modelsController = controller;
+    elements.fetchModelsButton.disabled = true;
+    elements.fetchModelsLabel.textContent = "Fetching…";
+    elements.configStatus.textContent = "Contacting the provider for its model list…";
+    elements.configStatus.className = "chat-config-status";
+    try {
+      const models = await fetchChatModels(credentials, controller.signal);
+      if (models.length === 0) throw new Error("The provider returned no usable models.");
+      const priorModel = this.models.some((model) => model.id === this.config.model) ? this.config.model : "";
+      this.setModelCatalog(models, credentials.baseUrl, credentials.apiKey, priorModel, this.config.reasoningEffort);
+      this.syncConfigFromForm();
+      const reasoningModels = models.filter((model) => model.reasoningEfforts.length > 0).length;
+      elements.modelHelp.textContent = `${models.length} model${models.length === 1 ? "" : "s"} found${reasoningModels > 0 ? ` · ${reasoningModels} with reasoning controls` : ""}.`;
+      elements.configStatus.textContent = "Models loaded. Choose a model and reasoning intensity, then save.";
+      elements.configStatus.className = "chat-config-status is-success";
+      this.updateConfigSummary();
+      this.updateComposerHint();
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        this.setModelCatalog([], "", "", "", "");
+        elements.modelHelp.textContent = "Enter your credentials, then fetch the available models.";
+        elements.configStatus.textContent = error instanceof Error ? error.message : "The model list could not be loaded.";
+        elements.configStatus.className = "chat-config-status is-error";
+      }
+    } finally {
+      if (this.modelsController === controller) {
+        this.modelsController = null;
+        elements.fetchModelsButton.disabled = false;
+        elements.fetchModelsLabel.textContent = "Fetch models";
+      }
     }
   }
 
@@ -435,18 +628,21 @@ export class ChatPanelController {
     const current = {
       apiKey: elements.apiKey.value.trim(),
       baseUrl: elements.baseUrl.value.trim().replace(/\/+$/, ""),
-      model: elements.model.value.trim(),
+      model: elements.modelSelect.value.trim(),
+      reasoningEffort: elements.reasoningEffort.value.trim(),
     };
     const hasConfig = this.isCurrentConfigValid();
     const matchesSelected = selected
-      && selected.name === elements.profileName.value.trim()
       && selected.apiKey === current.apiKey
       && selected.baseUrl === current.baseUrl
       && selected.model === current.model;
+    const selectedEffort = selected?.reasoningEffort ?? "";
+    const sameEffort = selected && selectedEffort === current.reasoningEffort;
     elements.configSummary.textContent = matchesSelected
-      ? `${selected.name} · ${selected.model}`
+      && sameEffort
+      ? `${selected.name} · ${selected.model}${selectedEffort ? ` · ${selectedEffort}` : ""}`
       : hasConfig
-        ? `${current.model} · unsaved changes`
+        ? `${current.model}${current.reasoningEffort ? ` · ${current.reasoningEffort}` : ""} · unsaved changes`
         : "Set up a model to start";
     elements.configToggleAction.textContent = hasConfig ? "Edit" : "Set up";
     elements.statusDot.classList.toggle("is-ready", hasConfig);
@@ -458,7 +654,8 @@ export class ChatPanelController {
       validateChatConfig({
         apiKey: this.elements.apiKey.value,
         baseUrl: this.elements.baseUrl.value,
-        model: this.elements.model.value,
+        model: this.elements.modelSelect.value,
+        reasoningEffort: this.elements.reasoningEffort.value,
       });
       return true;
     } catch {
@@ -471,10 +668,12 @@ export class ChatPanelController {
     const { elements } = this;
     let config: ChatConfig;
     try {
+      this.requireFetchedModel();
       config = validateChatConfig({
         apiKey: elements.apiKey.value,
         baseUrl: elements.baseUrl.value,
-        model: elements.model.value,
+        model: elements.modelSelect.value,
+        reasoningEffort: elements.reasoningEffort.value,
       });
     } catch (error) {
       elements.configStatus.textContent = error instanceof Error ? error.message : "Check the provider settings.";
@@ -520,7 +719,7 @@ export class ChatPanelController {
       this.elements.configStatus.className = "chat-config-status is-error";
       if (!this.elements.apiKey.value.trim()) this.elements.apiKey.focus();
       else if (!this.elements.baseUrl.value.trim()) this.elements.baseUrl.focus();
-      else this.elements.model.focus();
+      else this.elements.modelSelect.focus();
       return;
     }
     this.syncConfigFromForm();

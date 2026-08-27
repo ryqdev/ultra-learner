@@ -321,8 +321,9 @@
                       <span>Your key stays in this browser and is sent through the local proxy.</span>
                     </div>
                   </div>
-                  <label for="chat-profile-name">Setup name <span>shown in the saved list</span></label>
-                  <input id="chat-profile-name" type="text" autocomplete="off" placeholder="My OpenAI model" maxlength="80" aria-required="true" />
+                  <label for="chat-base-url">Base URL</label>
+                  <input id="chat-base-url" type="url" spellcheck="false" placeholder="https://api.openai.com/v1" aria-describedby="chat-base-url-help" aria-required="true" />
+                  <p class="chat-field-help" id="chat-base-url-help">Leave off <code>/chat/completions</code>; Ultra Learner adds it automatically.</p>
                   <label for="chat-api-key">API key <span>stored on this device</span></label>
                   <div class="chat-secret-input">
                     <input id="chat-api-key" type="password" autocomplete="off" placeholder="sk-… or local-key" aria-describedby="chat-api-key-help" aria-required="true" />
@@ -338,22 +339,34 @@
                   <div class="chat-config-section-heading">
                     <span class="chat-config-step" aria-hidden="true">4</span>
                     <div>
-                      <strong id="chat-model-heading">Pick the endpoint and model</strong>
-                      <span>These values decide where requests are sent.</span>
+                      <strong id="chat-model-heading">Find your models</strong>
+                      <span>Fetch the models supported by this endpoint.</span>
                     </div>
                   </div>
-                  <label for="chat-base-url">Base URL</label>
-                  <input id="chat-base-url" type="url" spellcheck="false" placeholder="https://api.openai.com/v1" aria-describedby="chat-base-url-help" aria-required="true" />
-                  <p class="chat-field-help" id="chat-base-url-help">Leave off <code>/chat/completions</code>; Ultra Learner adds it automatically.</p>
-                  <label for="chat-model">Model ID</label>
-                  <input id="chat-model" type="text" spellcheck="false" placeholder="gpt-4o-mini" list="chat-model-options" aria-required="true" />
-                  <datalist id="chat-model-options">
-                    <option value="gpt-4o-mini"></option>
-                    <option value="gpt-4.1-mini"></option>
-                    <option value="claude-3-5-sonnet"></option>
-                    <option value="llama3.2"></option>
-                  </datalist>
-                  <p class="chat-field-help">Use the exact model name shown by your provider.</p>
+                  <button class="chat-fetch-models-button" id="chat-fetch-models" type="button">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7.5A6.5 6.5 0 1 0 17 12"/><path d="M16 3.5v4h-4" /></svg>
+                    <span id="chat-fetch-models-label">Fetch models</span>
+                  </button>
+                </section>
+
+                <section class="chat-config-section" aria-labelledby="chat-selection-heading">
+                  <div class="chat-config-section-heading">
+                    <span class="chat-config-step" aria-hidden="true">5</span>
+                    <div>
+                      <strong id="chat-selection-heading">Choose a model</strong>
+                      <span>Model names and reasoning options come from the endpoint.</span>
+                    </div>
+                  </div>
+                  <label for="chat-model">Model</label>
+                  <select id="chat-model" data-model-select="true" aria-describedby="chat-model-help" required disabled>
+                    <option value="">Fetch models to choose one…</option>
+                  </select>
+                  <p class="chat-field-help" id="chat-model-help" role="status" aria-live="polite">Enter your credentials, then fetch the available models.</p>
+                  <label for="chat-reasoning-effort">Reasoning intensity</label>
+                  <select id="chat-reasoning-effort" aria-describedby="chat-reasoning-help" disabled>
+                    <option value="">Default (provider controlled)</option>
+                  </select>
+                  <p class="chat-field-help" id="chat-reasoning-help">The available levels are read from the selected model.</p>
                 </section>
 
                 <div class="chat-config-actions">

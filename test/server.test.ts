@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createAppServer } from "../src/server.ts";
-import { CHAT_PROXY_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
+import { CHAT_MODELS_PATH, CHAT_PROXY_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -38,6 +38,9 @@ describe("web server", () => {
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('id="chat-provider-preset"');
     expect(page).toContain('id="chat-api-key-toggle"');
+    expect(page).toContain('id="chat-fetch-models"');
+    expect(page).toContain('id="chat-model"');
+    expect(page).toContain('id="chat-reasoning-effort"');
     expect(page).toContain('id="chat-config-summary"');
     expect(page).toContain("Save &amp; use model");
     expect(page).toContain("Ollama · local");
@@ -76,6 +79,10 @@ describe("web server", () => {
     const chatTestGetResponse = await fetch(new URL(CHAT_TEST_PATH, server.url));
     expect(chatTestGetResponse.status).toBe(405);
     expect(chatTestGetResponse.headers.get("allow")).toBe("POST");
+
+    const chatModelsGetResponse = await fetch(new URL(CHAT_MODELS_PATH, server.url));
+    expect(chatModelsGetResponse.status).toBe(405);
+    expect(chatModelsGetResponse.headers.get("allow")).toBe("POST");
 
     const pageResponse = await fetch(server.url);
     expect(await pageResponse.text()).toContain('id="new-session-button"');
@@ -158,6 +165,63 @@ describe("web server", () => {
       body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "study-model" }),
     });
     expect(missingKey.status).toBe(401);
+  });
+
+  test("forwards model discovery and selected reasoning intensity safely", async () => {
+    let upstreamUrl = "";
+    let upstreamInit: RequestInit | undefined;
+    let upstreamCalls = 0;
+    server = createAppServer({
+      port: 0,
+      development: false,
+      sessionRoot: await sessionRoot(),
+      chatFetcher: async (input, init) => {
+        upstreamCalls += 1;
+        upstreamUrl = String(input);
+        upstreamInit = init;
+        if (upstreamUrl.endsWith("/chat/completions")) {
+          return Response.json({ choices: [{ message: { content: "OK" } }] });
+        }
+        return Response.json({
+          data: [
+            { id: "chat-model" },
+            { id: "reasoning-model", supported_parameters: ["reasoning_effort"] },
+          ],
+        });
+      },
+    });
+
+    const response = await fetch(new URL(CHAT_MODELS_PATH, server.url), {
+      method: "POST",
+      headers: { Authorization: "Bearer tab-secret", "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1" }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: [
+        { id: "chat-model" },
+        { id: "reasoning-model", supported_parameters: ["reasoning_effort"] },
+      ],
+    });
+    expect(upstreamUrl).toBe("https://provider.example/v1/models");
+    expect(upstreamInit?.method).toBe("GET");
+    expect(upstreamInit?.headers).toEqual({ Accept: "application/json", Authorization: "Bearer tab-secret" });
+    expect(String(upstreamInit?.body)).toBe("undefined");
+
+    const testResponse = await fetch(new URL(CHAT_TEST_PATH, server.url), {
+      method: "POST",
+      headers: { Authorization: "Bearer tab-secret", "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "reasoning-model", reasoningEffort: "high" }),
+    });
+    expect(testResponse.status).toBe(200);
+    expect(upstreamUrl).toBe("https://provider.example/v1/chat/completions");
+    expect(JSON.parse(String(upstreamInit?.body))).toEqual({
+      model: "reasoning-model",
+      messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
+      stream: false,
+      reasoning_effort: "high",
+    });
+    expect(upstreamCalls).toBe(2);
   });
 
   test("returns actionable proxy errors without exposing provider details", async () => {

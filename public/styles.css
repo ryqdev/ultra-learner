@@ -1598,6 +1598,7 @@ body.is-resizing-chat * {
 .chat-new-model-button,
 .chat-save-button,
 .chat-test-button,
+.chat-fetch-models-button,
 .chat-delete-button,
 .chat-send-button {
   min-height: 30px;
@@ -1641,6 +1642,7 @@ body.is-resizing-chat * {
 }
 
 .chat-test-button,
+.chat-fetch-models-button,
 .chat-new-model-button,
 .chat-delete-button {
   min-height: 35px;
@@ -1666,6 +1668,26 @@ body.is-resizing-chat * {
   color: var(--green);
 }
 
+.chat-fetch-models-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 9px;
+  color: var(--green);
+}
+
+.chat-fetch-models-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .chat-new-model-button {
   flex: 0 0 auto;
   color: var(--green);
@@ -1679,6 +1701,7 @@ body.is-resizing-chat * {
 }
 
 .chat-test-button:hover:not(:disabled),
+.chat-fetch-models-button:hover:not(:disabled),
 .chat-new-model-button:hover:not(:disabled),
 .chat-delete-button:hover:not(:disabled) {
   background: rgba(47, 101, 86, 0.07);
@@ -1695,6 +1718,7 @@ body.is-resizing-chat * {
 }
 
 .chat-test-button:disabled,
+.chat-fetch-models-button:disabled,
 .chat-new-model-button:disabled,
 .chat-delete-button:disabled {
   cursor: not-allowed;
