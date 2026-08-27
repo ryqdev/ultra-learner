@@ -15,7 +15,7 @@ export type ChatFetcher = (input: RequestInfo | URL, init?: RequestInit) => Prom
 export type ChatTransport = "proxy" | "direct";
 
 export interface ChatRequestOptions {
-  /** Select the browser transport explicitly; the same-origin proxy is the safe default. */
+  /** Select the browser transport explicitly; the same-origin proxy is the default. */
   transport?: ChatTransport;
 }
 
@@ -25,7 +25,14 @@ export interface ChatProxyPayload {
   messages: ChatMessage[];
 }
 
+export interface ChatTestPayload {
+  baseUrl: string;
+  model: string;
+}
+
 export const CHAT_PROXY_PATH = "/api/chat/completions";
+export const CHAT_TEST_PATH = "/api/chat/test";
+export const CHAT_TEST_MESSAGE = "Reply with OK in one short sentence.";
 export const MAXIMUM_CHAT_REQUEST_SIZE = 1_000_000;
 const MAXIMUM_CHAT_MESSAGES = 100;
 const MAXIMUM_CHAT_MESSAGE_LENGTH = 200_000;
@@ -108,11 +115,23 @@ export function parseChatProxyPayload(value: unknown): ChatProxyPayload {
   };
 }
 
+/** Parse the smaller payload accepted by the provider connection test. */
+export function parseChatTestPayload(value: unknown): ChatTestPayload {
+  if (!value || typeof value !== "object") throw new TypeError("The chat test request is invalid.");
+  const candidate = value as Partial<ChatTestPayload>;
+  if (typeof candidate.baseUrl !== "string" || typeof candidate.model !== "string") {
+    throw new TypeError("The chat provider settings are invalid.");
+  }
+  const baseUrl = normalizeBaseUrl(candidate.baseUrl);
+  const model = candidate.model.trim();
+  if (!model) throw new TypeError("Model is required.");
+  return { baseUrl, model };
+}
+
 export function chatCompletionsUrl(baseUrl: string): string {
   const normalized = normalizeBaseUrl(baseUrl);
-  return normalized.endsWith("/chat/completions")
-    ? normalized
-    : `${normalized}/chat/completions`;
+  if (normalized.endsWith("/chat/completions")) return normalized;
+  return `${normalized}/chat/completions`;
 }
 
 export function createChatRequest(config: ChatConfig, messages: ChatMessage[]): RequestInit & { url: string } {
@@ -148,9 +167,37 @@ export function createChatProxyRequest(config: ChatConfig, messages: ChatMessage
   };
 }
 
+/** Build the browser request for the lightweight same-origin connection test. */
+export function createChatTestRequest(config: ChatConfig): RequestInit & { url: string } {
+  const valid = validateChatConfig(config);
+  return {
+    url: CHAT_TEST_PATH,
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${valid.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      baseUrl: valid.baseUrl,
+      model: valid.model,
+    } satisfies ChatTestPayload),
+  };
+}
+
 interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
-  error?: { message?: string };
+  error?: { message?: string } | string;
+  message?: string;
+  code?: string;
+}
+
+function providerErrorMessage(payload: ChatCompletionResponse): string | undefined {
+  if (typeof payload.error === "string" && payload.error.trim()) return payload.error.trim();
+  if (payload.error && typeof payload.error === "object" && typeof payload.error.message === "string" && payload.error.message.trim()) {
+    return payload.error.message.trim();
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) return payload.message.trim();
+  return undefined;
 }
 
 function completionText(payload: ChatCompletionResponse): string {
@@ -173,6 +220,9 @@ function networkErrorMessage(url: string): string {
   if (url === CHAT_PROXY_PATH) {
     return "Could not reach the local chat proxy. Restart Ultra Learner and try again.";
   }
+  if (url === CHAT_TEST_PATH) {
+    return "Could not reach the local connection test. Restart Ultra Learner and try again.";
+  }
   let host = url;
   try {
     host = new URL(url).host;
@@ -192,16 +242,11 @@ async function responsePayload(response: Response): Promise<ChatCompletionRespon
   }
 }
 
-export async function requestChatCompletion(
-  config: ChatConfig,
-  messages: ChatMessage[],
-  signal?: AbortSignal,
-  fetcher: ChatFetcher = fetch,
-  options: ChatRequestOptions = {},
-): Promise<string> {
-  const request = options.transport === "proxy"
-    ? createChatProxyRequest(config, messages)
-    : createChatRequest(config, messages);
+async function requestCompletionResponse(
+  request: RequestInit & { url: string },
+  signal: AbortSignal | undefined,
+  fetcher: ChatFetcher,
+): Promise<ChatCompletionResponse> {
   const { url, ...init } = request;
   let response: Response;
   try {
@@ -218,9 +263,46 @@ export async function requestChatCompletion(
     throw new Error("Could not read the model provider response.", { cause: error });
   }
   if (!response.ok) {
-    throw new Error(payload.error?.message || `The model request failed (${response.status}).`);
+    throw new Error(providerErrorMessage(payload) || `The model request failed (${response.status}).`);
   }
+  return payload;
+}
+
+export async function requestChatCompletion(
+  config: ChatConfig,
+  messages: ChatMessage[],
+  signal?: AbortSignal,
+  fetcher: ChatFetcher = fetch,
+  options: ChatRequestOptions = {},
+): Promise<string> {
+  // Keep provider calls same-origin by default. Direct browser requests are
+  // retained only as an explicit compatibility option because most gateways
+  // do not grant CORS access to a local reader origin.
+  const request = options.transport === "direct"
+    ? createChatRequest(config, messages)
+    : createChatProxyRequest(config, messages);
+  const payload = await requestCompletionResponse(request, signal, fetcher);
   const text = completionText(payload);
   if (!text) throw new Error("The model returned an empty response.");
+  return text;
+}
+
+/**
+ * Send a minimal completion without adding anything to the current chat.
+ * The proxy keeps the provider URL and key on the same local boundary as
+ * normal chat requests, while the direct transport remains opt-in.
+ */
+export async function testChatConnection(
+  config: ChatConfig,
+  signal?: AbortSignal,
+  fetcher: ChatFetcher = fetch,
+  options: ChatRequestOptions = {},
+): Promise<string> {
+  const request = options.transport === "direct"
+    ? createChatRequest(config, [{ role: "user", content: CHAT_TEST_MESSAGE }])
+    : createChatTestRequest(config);
+  const payload = await requestCompletionResponse(request, signal, fetcher);
+  const text = completionText(payload);
+  if (!text) throw new Error("The provider returned an invalid completion response.");
   return text;
 }

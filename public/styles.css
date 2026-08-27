@@ -1671,11 +1671,42 @@ body.is-resizing-chat * {
   font-size: 9px;
 }
 
+.chat-config-form select {
+  width: 100%;
+  min-height: 31px;
+  padding: 0 9px;
+  color: var(--ink);
+  border: 1px solid rgba(74, 84, 78, 0.17);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--surface);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 9px;
+}
+
+.chat-config-form select:focus {
+  border-color: rgba(47, 101, 86, 0.45);
+}
+
+.chat-profile-row,
+.chat-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-profile-row select {
+  flex: 1;
+  min-width: 0;
+}
+
 .chat-config-form input:focus {
   border-color: rgba(47, 101, 86, 0.45);
 }
 
 .chat-save-button,
+.chat-test-button,
+.chat-delete-button,
 .chat-send-button {
   min-height: 30px;
   color: #fffdf8;
@@ -1689,6 +1720,48 @@ body.is-resizing-chat * {
 
 .chat-save-button {
   margin-top: 3px;
+}
+
+.chat-config-actions {
+  margin-top: 3px;
+}
+
+.chat-config-actions button {
+  flex: 1;
+}
+
+.chat-test-button,
+.chat-delete-button {
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--green);
+  border: 1px solid rgba(47, 101, 86, 0.25);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.chat-delete-button {
+  flex: 0 0 auto;
+  color: var(--coral);
+  border-color: rgba(231, 130, 105, 0.28);
+}
+
+.chat-test-button:hover:not(:disabled),
+.chat-delete-button:hover:not(:disabled) {
+  background: rgba(47, 101, 86, 0.07);
+}
+
+.chat-delete-button:hover:not(:disabled) {
+  background: rgba(231, 130, 105, 0.08);
+}
+
+.chat-test-button:disabled,
+.chat-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chat-config-status {
