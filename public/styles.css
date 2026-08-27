@@ -1158,48 +1158,16 @@ main {
   background: white;
 }
 
-.text-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-  line-height: 1;
-  text-align: initial;
-  transform-origin: 0 0;
-  user-select: text;
-  --min-font-size: 1;
-  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
-  --min-font-size-inv: calc(1 / var(--min-font-size));
-}
-
-.text-layer :is(span, br) {
-  position: absolute;
-  color: transparent;
-  cursor: text;
-  white-space: pre;
-  transform-origin: 0% 0%;
-  user-select: text;
-}
-
-.text-layer > :not(.markedContent),
-.text-layer .markedContent span:not(.markedContent) {
-  z-index: 1;
-  font-size: calc(var(--text-scale-factor) * var(--font-height));
-  --scale-x: 1;
-  --rotate: 0deg;
-  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
-}
-
-.text-layer .markedContent {
-  display: contents;
-}
-
-.text-layer ::selection {
+.textLayer ::selection {
   color: transparent;
   background: rgba(47, 101, 86, 0.22);
 }
 
-.text-layer.is-box-selecting {
+.textLayer.is-box-selecting {
+  pointer-events: none;
+}
+
+.textLayer.selecting ~ .annotationLayer section {
   pointer-events: none;
 }
 
