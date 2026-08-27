@@ -130,17 +130,11 @@
                 <span id="document-meta">PDF document</span>
               </div>
               <div class="document-actions">
-                <button class="text-button chat-toggle-button" id="chat-toggle" type="button" aria-label="Toggle AI study guide" aria-expanded="true" title="Toggle AI study guide">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 4.5h13v9h-7l-4 3v-3h-2v-9Z"/><path d="M6.5 8h7m-7 3h4"/></svg>
-                  AI guide
-                </button>
-                <button class="text-button" id="new-session-button" type="button" aria-label="Start a new conversation for this PDF" title="Start a new conversation for this PDF">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
-                  New session
-                </button>
-                <button class="text-button" id="new-file-button" type="button">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4"/><path d="M4 16.5h12"/></svg>
-                  New PDF
+                <button class="ai-panel-trigger" id="chat-toggle" type="button" aria-label="Close AI guide" aria-controls="chat-panel" aria-expanded="true" title="Close AI guide">
+                  <span class="ai-panel-trigger-mark" aria-hidden="true">
+                    <svg viewBox="0 0 20 20"><path d="M10 2.8c.5 3.9 2.5 5.9 6.4 6.4-3.9.5-5.9 2.5-6.4 6.4-.5-3.9-2.5-5.9-6.4-6.4 3.9-.5 5.9-2.5 6.4-6.4Z"/><path d="M16 2.5v3m-1.5-1.5h3"/></svg>
+                  </span>
+                  <span>AI guide</span>
                 </button>
               </div>
             </div>
@@ -224,25 +218,21 @@
               aria-orientation="vertical"
               title="Drag to resize AI study guide"
             ></div>
-            <div class="chat-panel-header">
-              <div>
-                <p class="chat-eyebrow"><span></span>Study companion</p>
-                <h2>Ask the page.</h2>
-              </div>
-              <button class="chat-collapse" id="chat-collapse" type="button" aria-label="Collapse AI study guide" title="Collapse AI study guide">
-                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 5 6-5 6"/></svg>
-              </button>
-            </div>
             <div class="chat-config-area">
-              <button class="chat-config-toggle" id="chat-config-toggle" type="button" aria-expanded="false">
-                <span class="chat-status-dot" id="chat-status-dot" aria-hidden="true"></span>
-                <span class="chat-config-toggle-copy">
-                  <span class="chat-config-toggle-label">AI model</span>
-                  <strong id="chat-config-summary">Set up a model to start</strong>
-                </span>
-                <span class="chat-config-toggle-action" id="chat-config-toggle-action">Set up</span>
-                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
-              </button>
+              <div class="chat-panel-controls">
+                <button class="chat-config-toggle" id="chat-config-toggle" type="button" aria-expanded="false">
+                  <span class="chat-status-dot" id="chat-status-dot" aria-hidden="true"></span>
+                  <span class="chat-config-toggle-copy">
+                    <span class="chat-config-toggle-label">AI model</span>
+                    <strong id="chat-config-summary">Set up a model to start</strong>
+                  </span>
+                  <span class="chat-config-toggle-action" id="chat-config-toggle-action">Set up</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
+                </button>
+                <button class="chat-collapse" id="chat-collapse" type="button" aria-label="Close AI guide" title="Close AI guide">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 5 6-5 6"/></svg>
+                </button>
+              </div>
               <form class="chat-config-form" id="chat-config-form" hidden>
                 <div class="chat-config-intro">
                   <span class="chat-config-intro-icon" aria-hidden="true">
@@ -265,7 +255,7 @@
                   <div class="chat-profile-row">
                     <label class="sr-only" for="chat-profile-select">Saved model setup</label>
                     <select id="chat-profile-select" aria-label="Select a saved model">
-                      <option value="">New model…</option>
+                      <option value="" data-placeholder="true">New model…</option>
                     </select>
                     <button class="chat-new-model-button" id="chat-new-model" type="button">New</button>
                     <button class="chat-delete-button" id="chat-delete-button" type="button" aria-label="Remove selected model" disabled>Remove</button>
@@ -339,7 +329,7 @@
                   </div>
                   <label for="chat-model">Model</label>
                   <select id="chat-model" data-model-select="true" aria-describedby="chat-model-help" required disabled>
-                    <option value="">Fetch models to choose one…</option>
+                    <option value="" data-placeholder="true">Fetch models to choose one…</option>
                   </select>
                   <p class="chat-field-help" id="chat-model-help" role="status" aria-live="polite">Enter your credentials, then fetch the available models.</p>
                   <label for="chat-reasoning-effort">Reasoning intensity</label>

@@ -57,9 +57,15 @@ describe("web server", () => {
     expect(page).toContain('id="chat-model"');
     expect(page).toContain('id="chat-reasoning-effort"');
     expect(page).toContain('id="chat-config-summary"');
+    expect(page).toContain('class="ai-panel-trigger"');
+    expect(page).toContain('aria-controls="chat-panel"');
     expect(page).toContain("Save &amp; use model");
     expect(page).toContain("Ollama · local");
-    expect(page).toContain('id="new-session-button"');
+    expect(page).toContain('data-placeholder="true"');
+    expect(page).not.toContain('id="new-session-button"');
+    expect(page).not.toContain('id="new-file-button"');
+    expect(page).not.toContain("Study companion");
+    expect(page).not.toContain("Ask the page.");
     expect(page).toContain('id="text-layer"');
     expect(page).toContain('class="textLayer" id="text-layer" tabindex="0"');
     expect(page).toContain('id="app-sidebar"');
@@ -100,7 +106,9 @@ describe("web server", () => {
     expect(chatModelsGetResponse.headers.get("allow")).toBe("POST");
 
     const pageResponse = await fetch(server.url);
-    expect(await pageResponse.text()).toContain('id="new-session-button"');
+    const page = await pageResponse.text();
+    expect(page).toContain('id="chat-toggle"');
+    expect(page).not.toContain('id="new-session-button"');
   });
 
   test("forwards chat requests through the same-origin proxy", async () => {

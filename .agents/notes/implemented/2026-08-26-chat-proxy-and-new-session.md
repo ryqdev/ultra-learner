@@ -10,7 +10,7 @@ The study companion called a user-configured model endpoint directly from the br
 
 Chat requests use a same-origin `POST /api/chat/completions` endpoint by default. The browser sends the validated provider base URL, model, messages, and tab-memory bearer key to the loopback Bun process. The server validates untrusted request data, forwards the common non-streaming `/chat/completions` request in memory, bounds request and response sizes, applies a timeout, and returns provider status or an actionable local/upstream error. A direct browser transport remains available as an explicit helper option for compatibility, but is not the UI default.
 
-The reader toolbar exposes `New session`. It clears the in-memory chat messages, current selection, and active request while retaining the currently rendered PDF and provider configuration. This is a conversation boundary and does not create another persisted PDF session.
+The workspace sidebar exposes `New chat`. It clears the in-memory chat messages, current selection, and active request while retaining the currently rendered PDF and provider configuration. This is a conversation boundary and does not create another persisted PDF session. The original reader-toolbar entry point was later removed by the [reader AI entry-point consolidation](2026-08-27-reader-ai-entry-point.md).
 
 ## Alternatives considered
 
@@ -18,7 +18,7 @@ The reader toolbar exposes `New session`. It clears the in-memory chat messages,
 
 **Persist provider credentials or chat transcripts.** Persistence could restore conversations across tabs, but would expand the local privacy and secret-management contract beyond the current prototype. Keys and messages remain memory-only.
 
-**Treat New session as a new PDF upload.** Reopening or duplicating document bytes would be slower and would pollute immutable PDF history; the requested behavior is a fresh conversation about the same open document.
+**Treat New chat as a new PDF upload.** Reopening or duplicating document bytes would be slower and would pollute immutable PDF history; the requested behavior is a fresh conversation about the same open document.
 
 ## Consequences
 

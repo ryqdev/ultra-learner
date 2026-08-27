@@ -32,8 +32,6 @@ const readerView = requiredElement("reader-view");
 const dropZone = requiredElement("drop-zone");
 const fileInput = requiredElement<HTMLInputElement>("file-input");
 const chooseButton = requiredElement<HTMLButtonElement>("choose-button");
-const newSessionButton = requiredElement<HTMLButtonElement>("new-session-button");
-const newFileButton = requiredElement<HTMLButtonElement>("new-file-button");
 const errorChooseButton = requiredElement<HTMLButtonElement>("error-choose-button");
 const themeButton = requiredElement<HTMLButtonElement>("theme-button");
 const sidebarToggle = requiredElement<HTMLButtonElement>("sidebar-toggle");
@@ -313,9 +311,7 @@ function chooseFile(): void {
 }
 
 chooseButton.addEventListener("click", chooseFile);
-newFileButton.addEventListener("click", chooseFile);
 errorChooseButton.addEventListener("click", chooseFile);
-newSessionButton.addEventListener("click", startNewSession);
 sidebarNewChat.addEventListener("click", () => {
   setMobileSidebarOpen(false);
   startNewSession();
@@ -449,10 +445,13 @@ function setChatCollapsed(collapsed: boolean): void {
   chatPanel.classList.toggle("is-collapsed", collapsed);
   readerView.classList.toggle("chat-collapsed", collapsed);
   chatToggle.setAttribute("aria-expanded", String(!collapsed));
+  const label = collapsed ? "Open AI guide" : "Close AI guide";
+  chatToggle.setAttribute("aria-label", label);
+  chatToggle.title = label;
   refreshReaderLayout();
 }
 
-chatToggle.addEventListener("click", () => setChatCollapsed(false));
+chatToggle.addEventListener("click", () => setChatCollapsed(!chatPanel.classList.contains("is-collapsed")));
 chatCollapse.addEventListener("click", () => setChatCollapsed(true));
 
 function setSelectionMode(mode: SelectionSource): void {
