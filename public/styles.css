@@ -569,6 +569,8 @@ main {
   position: relative;
   z-index: 12;
   display: flex;
+  grid-column: 1;
+  grid-row: 1;
   height: 100%;
   min-width: 0;
   flex-direction: column;
@@ -708,6 +710,8 @@ main {
 
 .reader-main {
   display: grid;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   grid-template-rows: 53px minmax(0, 1fr) 60px;
@@ -1143,6 +1147,8 @@ main {
 .chat-panel {
   position: relative;
   display: grid;
+  grid-column: 3;
+  grid-row: 1;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-width: 0;
   min-height: 0;
@@ -2267,8 +2273,14 @@ body.is-dark .session-delete-cancel:hover {
     top: 62px;
     right: 0;
     bottom: 0;
+    grid-column: 1 / -1;
     width: min(360px, calc(100vw - 24px));
+    background: var(--surface);
     box-shadow: -15px 0 35px rgba(30, 40, 35, 0.18);
+  }
+
+  body.is-dark .chat-panel {
+    background: var(--surface);
   }
 
   .chat-resize-handle {
@@ -2313,7 +2325,7 @@ body.is-dark .session-delete-cancel:hover {
   }
 
   .toolbar-status {
-    right: 10px;
+    display: none;
   }
 
   .keyboard-hint {
@@ -2333,7 +2345,8 @@ body.is-dark .session-delete-cancel:hover {
   }
 
   .selection-controls {
-    left: 10px;
+    position: static;
+    order: -1;
   }
 
   .selection-mode-label {

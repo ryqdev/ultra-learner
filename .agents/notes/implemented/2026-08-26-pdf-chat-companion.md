@@ -10,7 +10,7 @@ The reader needed a conversational study surface beside the PDF without coupling
 
 The browser composition root wires three explicit boundaries: `PdfReaderController` owns PDF.js and emits a provider-neutral `SelectionContext`; `ChatPanelController` owns provider configuration, conversation state, and chat UI; and pure helpers in `src/lib/chat.ts` and `src/lib/selection.ts` validate inputs and construct deterministic contracts. The reader overlays PDF.js `TextLayer` on the canvas for native text selection and offers a pointer-based box mode that resolves intersecting text runs into the same context shape. Chat requests use an OpenAI-compatible, non-streaming `/chat/completions` endpoint configured by the user. API keys and conversation state remain in tab memory only.
 
-The desktop guide occupies a bounded, resizable grid track. A separator on its left edge supports pointer dragging and keyboard adjustment, while a deterministic layout helper reserves enough width for the main reader. The chosen width lasts for the current tab only, matching the rest of the browser-owned reading state; compact layouts retain a fixed overlay width.
+The desktop guide occupies a bounded, resizable grid track. A separator on its left edge supports pointer dragging and keyboard adjustment, while a deterministic layout helper reserves enough width for the main reader. The chosen width lasts for the current tab only, matching the rest of the browser-owned reading state; compact layouts retain a fixed, opaque overlay so underlying PDF content cannot bleed through the guide.
 
 ## Alternatives considered
 
