@@ -8,7 +8,7 @@ The document bar presented separate AI guide, new-conversation, and new-PDF acti
 
 ## Decision
 
-The document bar reserves its far-right action for one visually distinct AI guide trigger. The trigger opens and closes the right-hand panel and mirrors its state through `aria-expanded`; the panel also retains a close control. New conversations remain available through the workspace sidebar, and new PDFs start from the Library's focused upload surface.
+The document bar initially reserved its far-right action for one visually distinct AI guide trigger. The trigger opened and closed the right-hand panel and mirrored its state through `aria-expanded`; the panel also retained a close control. New conversations remained available through the workspace sidebar, and new PDFs started from the Library's focused upload surface. The later [focused reader chrome](2026-08-28-focused-reader-chrome.md) decision removes the document bar and moves the AI trigger into the compact top strip while preserving the single-entry-point principle.
 
 The panel removes its decorative eyebrow and title, placing the model summary and close control in one compact first row. Empty input and model/profile selector hints use a dedicated muted placeholder color in both reading themes, while actual values retain the normal text color.
 
@@ -22,7 +22,7 @@ The panel removes its decorative eyebrow and title, placing the model summary an
 
 ## Consequences
 
-- The document bar has one clear right-aligned action and more room for long filenames.
+- The document bar had one clear right-aligned action and more room for long filenames until the focused reader chrome superseded the bar itself.
 - Starting another conversation or choosing another file requires the workspace navigation rather than a duplicate reader shortcut.
 - The model configuration begins closer to the top of the panel, leaving more vertical room for the conversation.
 - Placeholder and entered-value states are easier to distinguish without changing the provider-profile data contract.

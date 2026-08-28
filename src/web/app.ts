@@ -38,6 +38,7 @@ const errorChooseButton = requiredElement<HTMLButtonElement>("error-choose-butto
 const themeButton = requiredElement<HTMLButtonElement>("theme-button");
 const sidebarToggle = requiredElement<HTMLButtonElement>("sidebar-toggle");
 const sidebarClose = requiredElement<HTMLButtonElement>("sidebar-close");
+const readerLibrary = requiredElement<HTMLButtonElement>("reader-library");
 const chatToggle = requiredElement<HTMLButtonElement>("chat-toggle");
 const chatCollapse = requiredElement<HTMLButtonElement>("chat-collapse");
 const chatPanel = requiredElement("chat-panel");
@@ -435,6 +436,7 @@ sidebarClose.addEventListener("click", () => {
   reader.closeSidebar();
   refreshReaderLayout();
 });
+readerLibrary.addEventListener("click", () => showWelcome());
 
 function availableChatPanelWidth(): number {
   const readerBounds = readerView.getBoundingClientRect();

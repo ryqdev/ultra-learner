@@ -1,4 +1,4 @@
-export const DEFAULT_CHAT_PANEL_WIDTH = 340;
+export const DEFAULT_CHAT_PANEL_WIDTH = 300;
 export const MIN_CHAT_PANEL_WIDTH = 260;
 export const MAX_CHAT_PANEL_WIDTH = 640;
 export const MIN_READER_MAIN_WIDTH = 280;
