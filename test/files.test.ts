@@ -6,6 +6,7 @@ import {
   formatFileSize,
   isPdfFile,
   pdfFileValidationError,
+  pdfOpenErrorMessage,
 } from "../src/lib/files.ts";
 
 describe("PDF file helpers", () => {
@@ -31,6 +32,22 @@ describe("PDF file helpers", () => {
     expect(formatFileSize(850)).toBe("850 B");
     expect(formatFileSize(1536)).toBe("1.5 KB");
     expect(formatFileSize(12 * 1024 * 1024)).toBe("12 MB");
+  });
+
+  test("turns PDF.js failures into actionable reader errors", () => {
+    expect(pdfOpenErrorMessage(new Error("hashOriginal.toHex is not a function"))).toBe(
+      "This browser is missing features required by the PDF reader. Update the browser and try again.",
+    );
+    expect(pdfOpenErrorMessage(new Error("PasswordException: No password given"))).toBe(
+      "Password-protected PDFs are not supported in this first prototype.",
+    );
+    expect(pdfOpenErrorMessage(new Error("Invalid PDF structure."))).toBe(
+      "This document is not a valid or supported PDF.",
+    );
+    expect(pdfOpenErrorMessage(new Error("Unexpected renderer failure"))).toBe(
+      "The PDF reader reported: Unexpected renderer failure",
+    );
+    expect(pdfOpenErrorMessage(null)).toBe("The PDF reader stopped before it could display this document.");
   });
 
   test("turns filenames into readable document titles", () => {

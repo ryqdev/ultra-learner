@@ -105,6 +105,7 @@ describe("web server", () => {
     expect(appResponse.headers.get("content-type")).toContain("text/javascript");
     const app = await appResponse.text();
     expect(app.length).toBeGreaterThan(100_000);
+    expect(app).toContain("core-js");
     expect(app).not.toContain("Your uploaded PDFs will appear here.");
 
     const postResponse = await fetch(server.url, { method: "POST" });
@@ -302,6 +303,7 @@ describe("web server", () => {
     const workerResponse = await fetch(new URL("/assets/pdf.worker.mjs", server.url));
     expect(workerResponse.status).toBe(200);
     expect(workerResponse.headers.get("content-type")).toContain("text/javascript");
+    expect(await workerResponse.text()).toContain("core-js");
 
     const wasmResponse = await fetch(new URL("/assets/wasm/openjpeg.wasm", server.url));
     expect(wasmResponse.status).toBe(200);

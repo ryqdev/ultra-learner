@@ -8,10 +8,10 @@ import {
   type PDFDocumentLoadingTask,
   type PDFPageProxy,
   type RenderTask,
-} from "pdfjs-dist";
-import { TextLayerBuilder } from "pdfjs-dist/web/pdf_viewer.mjs";
+} from "pdfjs-dist/legacy/build/pdf.mjs";
+import { TextLayerBuilder } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 
-import { documentTitle, pdfFileValidationError } from "../lib/files.ts";
+import { documentTitle, pdfFileValidationError, pdfOpenErrorMessage } from "../lib/files.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -598,10 +598,7 @@ export class PdfReaderController {
   private showError(error: unknown): void {
     window.clearTimeout(this.pageLoadingTimer);
     this.pageLoadingTimer = undefined;
-    const message = error instanceof Error ? error.message : "The file may be damaged or unsupported.";
-    this.elements.errorMessage.textContent = message.includes("password")
-      ? "Password-protected PDFs are not supported in this first prototype."
-      : "Try a different file or make sure the document is a valid PDF.";
+    this.elements.errorMessage.textContent = pdfOpenErrorMessage(error);
     this.elements.readerLoading.hidden = true;
     this.elements.canvasFrame.hidden = true;
     this.elements.readerError.hidden = false;

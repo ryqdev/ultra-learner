@@ -527,7 +527,7 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       }
 
       if (url.pathname === "/assets/pdf.worker.mjs") {
-        return responseForFile(join(root, "node_modules", "pdfjs-dist", "build", "pdf.worker.min.mjs"));
+        return responseForFile(join(root, "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"));
       }
 
       if (url.pathname === "/assets/pdf_viewer.css") {
