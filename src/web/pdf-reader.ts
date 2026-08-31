@@ -15,12 +15,14 @@ import { documentTitle, pdfFileValidationError } from "../lib/files.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
-  vimScrollDelta,
+  type VimScrollKey,
   clampPage,
   isVimScrollBoundary,
   nextZoom,
   readingProgress,
   vimPageDelta,
+  vimScrollDelta,
+  vimScrollProgress,
   zoomLabel,
 } from "../lib/reader.ts";
 import { createSelectionContext, type SelectionContext, type SelectionSource } from "../lib/selection.ts";
@@ -126,6 +128,8 @@ export class PdfReaderController {
   private pendingTextLayer: TextLayerBuilder | null = null;
   private pendingAnnotationLayer: AnnotationLayer | null = null;
   private thumbnailRenderTask: RenderTask | null = null;
+  private vimScrollAnimationFrame: number | null = null;
+  private vimScrollTarget: number | null = null;
   private readonly linkService: ReaderPdfLinkService;
   private readonly downloadManager = new ReaderPdfDownloadManager();
 
@@ -292,7 +296,7 @@ export class PdfReaderController {
         void this.goToPage(this.state.page + (key === "j" ? 1 : -1));
         return;
       }
-      this.elements.readerStage.scrollBy({ top: vimScrollDelta(key), behavior: "auto" });
+      this.animateVimScroll(key);
       return;
     }
     void this.goToPage(this.state.page + vimPageDelta(key));
@@ -485,7 +489,42 @@ export class PdfReaderController {
     this.callbacks.onSelection(null);
   }
 
+  private animateVimScroll(key: VimScrollKey): void {
+    const stage = this.elements.readerStage;
+    const start = stage.scrollTop;
+    const maximum = Math.max(stage.scrollHeight - stage.clientHeight, 0);
+    const target = Math.min(Math.max((this.vimScrollTarget ?? start) + vimScrollDelta(key), 0), maximum);
+    if (this.vimScrollAnimationFrame !== null) window.cancelAnimationFrame(this.vimScrollAnimationFrame);
+    if (target === start) {
+      this.vimScrollAnimationFrame = null;
+      this.vimScrollTarget = null;
+      return;
+    }
+
+    this.vimScrollTarget = target;
+    const startedAt = window.performance.now();
+    const animate = (now: number): void => {
+      const progress = vimScrollProgress(now - startedAt);
+      stage.scrollTop = start + (target - start) * progress;
+      if (progress < 1) {
+        this.vimScrollAnimationFrame = window.requestAnimationFrame(animate);
+        return;
+      }
+      stage.scrollTop = target;
+      this.vimScrollAnimationFrame = null;
+      this.vimScrollTarget = null;
+    };
+    this.vimScrollAnimationFrame = window.requestAnimationFrame(animate);
+  }
+
+  private cancelVimScroll(): void {
+    if (this.vimScrollAnimationFrame !== null) window.cancelAnimationFrame(this.vimScrollAnimationFrame);
+    this.vimScrollAnimationFrame = null;
+    this.vimScrollTarget = null;
+  }
+
   private cancelCurrentWork(): void {
+    this.cancelVimScroll();
     window.clearTimeout(this.pageLoadingTimer);
     this.pageLoadingTimer = undefined;
     this.state.renderTask?.cancel();
@@ -606,6 +645,7 @@ export class PdfReaderController {
   }
 
   private scrollToDestination(location: PdfDestinationLocation | null): void {
+    this.cancelVimScroll();
     if (!location) {
       this.elements.readerStage.scrollTo({ top: 0, left: 0 });
       return;
@@ -626,6 +666,7 @@ export class PdfReaderController {
   }
 
   private async renderCurrentPage(recalculateFit = false): Promise<void> {
+    this.cancelVimScroll();
     const pdf = this.state.document;
     if (!pdf) return;
 

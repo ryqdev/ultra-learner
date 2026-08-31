@@ -9,9 +9,11 @@ import {
   nextZoom,
   readerKeyboardAction,
   readingProgress,
+  VIM_SCROLL_DURATION_MS,
   VIM_SCROLL_STEP,
   vimPageDelta,
   vimScrollDelta,
+  vimScrollProgress,
   zoomLabel,
 } from "../src/lib/reader.ts";
 
@@ -40,8 +42,14 @@ describe("reader state helpers", () => {
   });
 
   test("maps Vim navigation keys to predictable movements", () => {
-    expect(vimScrollDelta("j")).toBe(VIM_SCROLL_STEP);
-    expect(vimScrollDelta("k")).toBe(-VIM_SCROLL_STEP);
+    expect(VIM_SCROLL_STEP).toBe(56);
+    expect(vimScrollDelta("j")).toBe(56);
+    expect(vimScrollDelta("k")).toBe(-56);
+    expect(VIM_SCROLL_DURATION_MS).toBe(90);
+    expect(vimScrollProgress(-1)).toBe(0);
+    expect(vimScrollProgress(45)).toBeCloseTo(0.875);
+    expect(vimScrollProgress(90)).toBe(1);
+    expect(vimScrollProgress(180)).toBe(1);
     expect(vimPageDelta("d")).toBe(1);
     expect(vimPageDelta("u")).toBe(-1);
   });

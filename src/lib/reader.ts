@@ -1,7 +1,8 @@
 export const MIN_ZOOM = 0.6;
 export const MAX_ZOOM = 2;
 export const ZOOM_STEP = 0.1;
-export const VIM_SCROLL_STEP = 140;
+export const VIM_SCROLL_STEP = 56;
+export const VIM_SCROLL_DURATION_MS = 90;
 
 export type VimScrollKey = "j" | "k";
 export type VimPageKey = "d" | "u";
@@ -28,6 +29,12 @@ export function readerKeyboardAction(
 /** Return the small vertical movement associated with Vim's line keys. */
 export function vimScrollDelta(key: VimScrollKey): number {
   return key === "j" ? VIM_SCROLL_STEP : -VIM_SCROLL_STEP;
+}
+
+/** Return fast ease-out progress for Vim's short scroll animation. */
+export function vimScrollProgress(elapsedMs: number): number {
+  const linearProgress = Math.min(Math.max(elapsedMs / VIM_SCROLL_DURATION_MS, 0), 1);
+  return 1 - (1 - linearProgress) ** 3;
 }
 
 /** Return whether a Vim scroll key is already at the corresponding viewport edge. */
