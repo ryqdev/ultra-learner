@@ -10,7 +10,7 @@ The reader stacked a global title bar, a document title bar, and a sixty-pixel t
 
 Reading mode hides the global workspace navigation and top bar, removes the document bar, and starts with the thumbnail rail closed. A forty-pixel top strip becomes the single control surface: it keeps icon-only Library, thumbnail, selection, fit, and AI actions around the compact page and zoom controls. The document filename and reading progress remain available to assistive technology without taking visible space.
 
-The AI guide remains available beside the PDF, but its default surface is limited to a plain model selector row, the conversation, and an integrated composer. The empty state uses one heading and one sentence; decorative marks, suggestion chips, setup introductions, and privacy footers are removed. Detailed provider fields appear only when the learner expands model setup. This decision supersedes the document-bar placement in [the earlier AI entry-point note](2026-08-27-reader-ai-entry-point.md).
+The AI guide remains available beside the PDF, but its default surface is limited to a plain model selector row, the conversation, and an integrated composer. The empty state uses one heading and one sentence; decorative marks, suggestion chips, setup introductions, and privacy footers are removed. Detailed provider fields appear only when the learner expands model setup. This decision supersedes the document-bar placement in [the earlier AI entry-point note](2026-08-27-reader-ai-entry-point.md). The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) supersedes the conversation, collapsed-setup, and AI selection-control portions of this decision.
 
 ## Alternatives considered
 

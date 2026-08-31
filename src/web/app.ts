@@ -1,4 +1,4 @@
-import { ChatPanelController } from "./chat-panel.ts";
+import { ModelConfigPanelController } from "./chat-panel.ts";
 import { requiredElement } from "./dom.ts";
 import { PdfReaderController } from "./pdf-reader.ts";
 import { configureSessionDeleteDialog } from "./session-delete-dialog.ts";
@@ -17,7 +17,6 @@ import {
   clampChatPanelWidth,
 } from "../lib/layout.ts";
 import { readerKeyboardAction } from "../lib/reader.ts";
-import type { SelectionSource } from "../lib/selection.ts";
 import type { SessionSummary } from "../lib/sessions.ts";
 
 const appShell = requiredElement("app-shell");
@@ -25,7 +24,6 @@ const appSidebar = requiredElement("app-sidebar");
 const appSidebarCollapse = requiredElement<HTMLButtonElement>("app-sidebar-collapse");
 const appSidebarToggle = requiredElement<HTMLButtonElement>("app-sidebar-toggle");
 const appSidebarBackdrop = requiredElement("app-sidebar-backdrop");
-const sidebarNewChat = requiredElement<HTMLButtonElement>("sidebar-new-chat");
 const sidebarLibrary = requiredElement<HTMLButtonElement>("sidebar-library");
 const sidebarRefresh = requiredElement<HTMLButtonElement>("sidebar-refresh");
 const topbarTitle = requiredElement("topbar-title");
@@ -44,8 +42,6 @@ const chatCollapse = requiredElement<HTMLButtonElement>("chat-collapse");
 const chatPanel = requiredElement("chat-panel");
 const chatResizeHandle = requiredElement("chat-resize-handle");
 const readerMain = requiredElement("reader-main");
-const textSelectMode = requiredElement<HTMLButtonElement>("text-select-mode");
-const boxSelectMode = requiredElement<HTMLButtonElement>("box-select-mode");
 const toast = requiredElement("toast");
 const historyList = requiredElement("history-list");
 const historyStatus = requiredElement("history-status");
@@ -125,7 +121,7 @@ function setLibraryActive(active: boolean): void {
   }
 }
 
-const chat = new ChatPanelController();
+new ModelConfigPanelController();
 const reader = new PdfReaderController(
   {
     readerView,
@@ -155,7 +151,6 @@ const reader = new PdfReaderController(
   },
   {
     onFileAccepted: showReader,
-    onSelection: (selection) => chat.setSelection(selection),
     onToast: showToast,
   },
 );
@@ -346,7 +341,6 @@ async function openUploadedFile(file: File): Promise<void> {
 }
 
 function showReader(title = "Reading"): void {
-  chat.resetConversation();
   appShell.classList.add("is-reading");
   welcomeView.hidden = true;
   readerView.hidden = false;
@@ -357,19 +351,6 @@ function showReader(title = "Reading"): void {
   window.requestAnimationFrame(fitChatPanelWidth);
 }
 
-function startNewSession(): void {
-  if (!reader.documentLoaded) {
-    showWelcome();
-    showToast("Choose a PDF to start a new chat.");
-    window.requestAnimationFrame(() => chooseButton.focus());
-    return;
-  }
-  setChatCollapsed(false);
-  chat.startNewSession();
-  setTopbarTitle("New chat");
-  showToast("Started a new conversation for this PDF.");
-}
-
 function chooseFile(): void {
   fileInput.value = "";
   fileInput.click();
@@ -377,10 +358,6 @@ function chooseFile(): void {
 
 chooseButton.addEventListener("click", chooseFile);
 errorChooseButton.addEventListener("click", chooseFile);
-sidebarNewChat.addEventListener("click", () => {
-  setMobileSidebarOpen(false);
-  startNewSession();
-});
 sidebarLibrary.addEventListener("click", () => showWelcome());
 sidebarRefresh.addEventListener("click", () => void refreshHistory());
 appSidebarCollapse.addEventListener("click", () => {
@@ -519,18 +496,6 @@ function setChatCollapsed(collapsed: boolean): void {
 
 chatToggle.addEventListener("click", () => setChatCollapsed(!chatPanel.classList.contains("is-collapsed")));
 chatCollapse.addEventListener("click", () => setChatCollapsed(true));
-
-function setSelectionMode(mode: SelectionSource): void {
-  reader.setSelectionMode(mode);
-  const isText = mode === "text";
-  textSelectMode.classList.toggle("is-active", isText);
-  boxSelectMode.classList.toggle("is-active", !isText);
-  textSelectMode.setAttribute("aria-pressed", String(isText));
-  boxSelectMode.setAttribute("aria-pressed", String(!isText));
-}
-
-textSelectMode.addEventListener("click", () => setSelectionMode("text"));
-boxSelectMode.addEventListener("click", () => setSelectionMode("box"));
 
 themeButton.addEventListener("click", () => {
   const isDark = document.body.classList.toggle("is-dark");

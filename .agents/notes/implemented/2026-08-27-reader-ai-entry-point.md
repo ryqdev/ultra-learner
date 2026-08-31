@@ -10,6 +10,8 @@ The document bar presented separate AI guide, new-conversation, and new-PDF acti
 
 The document bar initially reserved its far-right action for one visually distinct AI guide trigger. The trigger opened and closed the right-hand panel and mirrored its state through `aria-expanded`; the panel also retained a close control. New conversations remained available through the workspace sidebar, and new PDFs started from the Library's focused upload surface. The later [focused reader chrome](2026-08-28-focused-reader-chrome.md) decision removes the document bar and moves the AI trigger into the compact top strip while preserving the single-entry-point principle.
 
+The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) removes the New chat action and makes model setup the guide's only interaction.
+
 The panel removes its decorative eyebrow and title, placing the model summary and close control in one compact first row. Empty input and model/profile selector hints use a dedicated muted placeholder color in both reading themes, while actual values retain the normal text color.
 
 ## Alternatives considered

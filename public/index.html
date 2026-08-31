@@ -35,13 +35,6 @@
         </div>
 
         <div class="app-sidebar-body">
-          <div class="app-sidebar-actions">
-            <button class="sidebar-primary-action" id="sidebar-new-chat" type="button" aria-label="Start a new chat">
-              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 15.5h3l7.8-7.8a2.1 2.1 0 0 0-3-3l-7.8 7.8v3Z"/><path d="m11.5 5.5 3 3M4.5 18h11" /></svg>
-              <span>New chat</span>
-            </button>
-          </div>
-
           <nav class="app-sidebar-nav" aria-label="Library navigation">
             <button class="sidebar-nav-item is-active" id="sidebar-library" type="button" aria-label="Open library" aria-current="page">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 4.5h3.2c1.1 0 2 .9 2 2v9h-3.2c-1.1 0-2-.9-2-2v-9Z"/><path d="M10 6.5c0-1.1.9-2 2-2h3.5v9c0 1.1-.9 2-2 2H10m0-9v9" /></svg>
@@ -152,14 +145,6 @@
                 <button class="tool-button" id="sidebar-toggle" type="button" aria-label="Toggle page thumbnails" title="Toggle page thumbnails">
                   <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 3.5h13v13h-13v-13Z"/><path d="M7.5 3.5v13M10 7h4m-4 3h4m-4 3h3"/></svg>
                 </button>
-                <button class="selection-mode-button is-active" id="text-select-mode" type="button" aria-pressed="true" title="Select text from the PDF">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3v14m0-14h7a3 3 0 0 1 0 6H5m0 0h8a3 3 0 0 1 0 6H5"/></svg>
-                  <span class="sr-only">Select text</span>
-                </button>
-                <button class="selection-mode-button" id="box-select-mode" type="button" aria-pressed="false" title="Draw a box around PDF text">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7V4h3m6 0h3v3m0 6v3h-3m-6 0H4v-3"/></svg>
-                  <span class="sr-only">Box select</span>
-                </button>
               </div>
 
               <div class="toolbar-center">
@@ -207,32 +192,31 @@
             </div>
           </div>
 
-          <aside class="chat-panel" id="chat-panel" aria-label="AI study guide">
+          <aside class="chat-panel" id="chat-panel" aria-label="AI model configuration">
             <div
               class="chat-resize-handle"
               id="chat-resize-handle"
               role="separator"
               tabindex="0"
-              aria-label="Resize AI study guide"
+              aria-label="Resize AI model configuration"
               aria-controls="reader-main chat-panel"
               aria-orientation="vertical"
-              title="Drag to resize AI study guide"
+              title="Drag to resize AI model configuration"
             ></div>
             <div class="chat-config-area">
               <div class="chat-panel-controls">
-                <button class="chat-config-toggle" id="chat-config-toggle" type="button" aria-expanded="false">
+                <div class="chat-config-heading">
                   <span class="chat-status-dot" id="chat-status-dot" aria-hidden="true"></span>
-                  <span class="chat-config-toggle-copy">
-                    <strong id="chat-config-summary">Set up a model to start</strong>
+                  <span class="chat-config-heading-copy">
+                    <strong>Model configuration</strong>
+                    <span id="chat-config-summary">Set up a model</span>
                   </span>
-                  <span class="sr-only" id="chat-config-toggle-action">Set up</span>
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
-                </button>
+                </div>
                 <button class="chat-collapse" id="chat-collapse" type="button" aria-label="Close AI guide" title="Close AI guide">
                   <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8m0-8-8 8"/></svg>
                 </button>
               </div>
-              <form class="chat-config-form" id="chat-config-form" hidden>
+              <form class="chat-config-form" id="chat-config-form">
                 <section class="chat-config-section">
                   <label for="chat-profile-select">Saved setup</label>
                   <div class="chat-profile-row">
@@ -300,29 +284,6 @@
                 <p class="chat-config-status" id="chat-config-status" role="status"></p>
               </form>
             </div>
-            <div class="chat-message-list" id="chat-message-list" aria-live="polite">
-              <div class="chat-empty-state" id="chat-empty-state">
-                <strong>Ask this PDF</strong>
-                <p>Select a passage for a focused answer, or ask about the document.</p>
-              </div>
-            </div>
-            <div class="chat-selection-card" id="chat-selection-card" hidden>
-              <div class="chat-selection-heading">
-                <span id="chat-selection-label">Text selection · page 1</span>
-                <button id="chat-clear-selection" type="button" aria-label="Clear selected passage">×</button>
-              </div>
-              <p id="chat-selection-text"></p>
-            </div>
-            <form class="chat-composer" id="chat-composer">
-              <label class="sr-only" for="chat-prompt">Ask the study companion</label>
-              <textarea id="chat-prompt" rows="2" placeholder="Ask about this document…"></textarea>
-              <div class="chat-composer-footer">
-                <span class="sr-only" id="chat-composer-hint">Add a provider key above to start chatting.</span>
-                <button class="chat-send-button" id="chat-send" type="submit" aria-label="Send question" title="Send question">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4.5 12-2-4-5.5-2Z"/><path d="m9.5 12 6.5-8"/></svg>
-                </button>
-              </div>
-            </form>
           </aside>
         </section>
       </main>

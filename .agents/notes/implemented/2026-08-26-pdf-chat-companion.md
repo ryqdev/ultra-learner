@@ -12,6 +12,8 @@ The browser composition root wires three explicit boundaries: `PdfReaderControll
 
 The desktop guide occupies a bounded, resizable grid track. A separator on its left edge supports pointer dragging and keyboard adjustment, while a deterministic layout helper reserves enough width for the main reader. The chosen width lasts for the current tab only, matching the rest of the browser-owned reading state; compact layouts retain a fixed, opaque overlay so underlying PDF content cannot bleed through the guide.
 
+The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) removes the conversation and PDF-selection UI while preserving model setup and its resizable panel.
+
 ## Alternatives considered
 
 **Proxy model calls through Bun.** A server proxy would hide keys and enable centralized policy, but it would require a credential/session boundary and would make the local-first prototype responsible for secrets and provider uptime.

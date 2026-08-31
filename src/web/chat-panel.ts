@@ -2,12 +2,10 @@ import {
   DEFAULT_CHAT_CONFIG,
   fetchChatModels,
   testChatConnection,
-  requestChatCompletion,
   validateChatCredentials,
   validateChatConfig,
   type ChatConfig,
   type ChatModel,
-  type ChatMessage,
 } from "../lib/chat.ts";
 import {
   CHAT_PROFILE_STORAGE_KEY,
@@ -19,19 +17,11 @@ import {
   upsertChatProfile,
   type ChatProfileState,
 } from "../lib/chat-profiles.ts";
-import {
-  selectionLabel,
-  selectionPrompt,
-  type SelectionContext,
-} from "../lib/selection.ts";
 import { requiredElement } from "./dom.ts";
 
-interface ChatPanelElements {
-  panel: HTMLElement;
+interface ModelConfigPanelElements {
   configForm: HTMLFormElement;
-  configToggle: HTMLButtonElement;
   configSummary: HTMLElement;
-  configToggleAction: HTMLElement;
   statusDot: HTMLElement;
   profileSelect: HTMLSelectElement;
   newModelButton: HTMLButtonElement;
@@ -49,16 +39,6 @@ interface ChatPanelElements {
   testLabel: HTMLElement;
   deleteButton: HTMLButtonElement;
   configStatus: HTMLElement;
-  messageList: HTMLElement;
-  emptyState: HTMLElement;
-  selectionCard: HTMLElement;
-  selectionLabel: HTMLElement;
-  selectionText: HTMLElement;
-  clearSelection: HTMLButtonElement;
-  composer: HTMLFormElement;
-  prompt: HTMLTextAreaElement;
-  sendButton: HTMLButtonElement;
-  composerHint: HTMLElement;
 }
 
 interface ProviderPreset {
@@ -88,39 +68,20 @@ function blankProfileState(): ChatProfileState {
   return { version: CHAT_PROFILE_STORAGE_VERSION, activeProfileId: null, profiles: [] };
 }
 
-function createMessageElement(message: ChatMessage): HTMLElement {
-  const article = document.createElement("article");
-  article.className = `chat-message chat-message-${message.role}`;
-  const role = document.createElement("span");
-  role.className = "chat-message-role";
-  role.textContent = message.role === "assistant" ? "Learner guide" : "You";
-  const content = document.createElement("p");
-  content.textContent = message.content;
-  article.append(role, content);
-  return article;
-}
-
-export class ChatPanelController {
-  private readonly elements: ChatPanelElements;
-  private readonly messages: ChatMessage[] = [];
+export class ModelConfigPanelController {
+  private readonly elements: ModelConfigPanelElements;
   private config: ChatConfig = { apiKey: "", ...DEFAULT_CHAT_CONFIG };
   private profileState: ChatProfileState = blankProfileState();
   private models: ChatModel[] = [];
   private modelsBaseUrl = "";
   private modelsApiKey = "";
-  private selection: SelectionContext | null = null;
-  private requestController: AbortController | null = null;
   private testController: AbortController | null = null;
   private modelsController: AbortController | null = null;
-  private configOpen = false;
 
   public constructor() {
     this.elements = {
-      panel: requiredElement("chat-panel"),
       configForm: requiredElement<HTMLFormElement>("chat-config-form"),
-      configToggle: requiredElement<HTMLButtonElement>("chat-config-toggle"),
       configSummary: requiredElement("chat-config-summary"),
-      configToggleAction: requiredElement("chat-config-toggle-action"),
       statusDot: requiredElement("chat-status-dot"),
       profileSelect: requiredElement<HTMLSelectElement>("chat-profile-select"),
       newModelButton: requiredElement<HTMLButtonElement>("chat-new-model"),
@@ -138,81 +99,14 @@ export class ChatPanelController {
       testLabel: requiredElement("chat-test-label"),
       deleteButton: requiredElement<HTMLButtonElement>("chat-delete-button"),
       configStatus: requiredElement("chat-config-status"),
-      messageList: requiredElement("chat-message-list"),
-      emptyState: requiredElement("chat-empty-state"),
-      selectionCard: requiredElement("chat-selection-card"),
-      selectionLabel: requiredElement("chat-selection-label"),
-      selectionText: requiredElement("chat-selection-text"),
-      clearSelection: requiredElement<HTMLButtonElement>("chat-clear-selection"),
-      composer: requiredElement<HTMLFormElement>("chat-composer"),
-      prompt: requiredElement<HTMLTextAreaElement>("chat-prompt"),
-      sendButton: requiredElement<HTMLButtonElement>("chat-send"),
-      composerHint: requiredElement("chat-composer-hint"),
     };
     this.loadProfiles();
     this.bindEvents();
-    this.renderMessages();
     this.updateConfigSummary();
-    this.updateComposerHint();
-  }
-
-  public setSelection(selection: SelectionContext | null): void {
-    this.selection = selection;
-    const { elements } = this;
-    if (!selection) {
-      elements.selectionCard.hidden = true;
-      this.updateComposerHint();
-      return;
-    }
-    elements.selectionCard.hidden = false;
-    elements.selectionLabel.textContent = selectionLabel(selection);
-    elements.selectionText.textContent = selection.text;
-    elements.composerHint.textContent = "This passage will be included with your next question.";
-  }
-
-  public clearSelection(): void {
-    this.setSelection(null);
-  }
-
-  public resetConversation(): void {
-    this.requestController?.abort();
-    this.requestController = null;
-    if (this.testController) {
-      this.testController.abort();
-      this.testController = null;
-      this.elements.testButton.disabled = false;
-      this.elements.testLabel.textContent = "Test connection";
-    }
-    if (this.modelsController) {
-      this.modelsController.abort();
-      this.modelsController = null;
-      this.elements.fetchModelsButton.disabled = false;
-      this.elements.fetchModelsLabel.textContent = "Fetch models";
-    }
-    this.messages.splice(0);
-    this.elements.prompt.value = "";
-    this.clearSelection();
-    this.setBusy(false);
-    this.renderMessages();
-  }
-
-  /** Start a blank conversation while keeping the provider configuration for this tab. */
-  public startNewSession(): void {
-    this.resetConversation();
-    this.elements.prompt.focus();
-  }
-
-  public toggleVisibility(): void {
-    this.elements.panel.classList.toggle("is-collapsed");
   }
 
   private bindEvents(): void {
     const { elements } = this;
-    elements.configToggle.addEventListener("click", () => {
-      this.configOpen = !this.configOpen;
-      elements.configForm.hidden = !this.configOpen;
-      elements.configToggle.setAttribute("aria-expanded", String(this.configOpen));
-    });
     elements.configForm.addEventListener("submit", (event) => {
       event.preventDefault();
       this.saveConfig();
@@ -227,29 +121,16 @@ export class ChatPanelController {
         this.syncConfigFromForm();
         this.syncProviderPreset();
         this.updateConfigSummary();
-        this.updateComposerHint();
       });
     }
     elements.modelSelect.addEventListener("change", () => this.selectModel(elements.modelSelect.value));
     elements.reasoningEffort.addEventListener("change", () => {
       this.syncConfigFromForm();
       this.updateConfigSummary();
-      this.updateComposerHint();
     });
     elements.fetchModelsButton.addEventListener("click", () => void this.fetchModels());
     elements.testButton.addEventListener("click", () => void this.testConfig());
     elements.deleteButton.addEventListener("click", () => this.deleteSelectedProfile());
-    elements.clearSelection.addEventListener("click", () => this.clearSelection());
-    elements.composer.addEventListener("submit", (event) => {
-      event.preventDefault();
-      void this.send();
-    });
-    elements.prompt.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        void this.send();
-      }
-    });
   }
 
   private saveConfig(): void {
@@ -276,7 +157,6 @@ export class ChatPanelController {
         elements.configStatus.textContent = `${profile.name} is ready to use.`;
         elements.configStatus.className = "chat-config-status is-success";
       }
-      this.updateComposerHint();
     } catch (error) {
       elements.configStatus.textContent = error instanceof Error ? error.message : "Check the provider settings.";
       elements.configStatus.className = "chat-config-status is-error";
@@ -369,7 +249,6 @@ export class ChatPanelController {
       this.elements.configStatus.textContent = "New setup — choose a provider or enter custom details.";
       this.elements.configStatus.className = "chat-config-status";
       this.updateConfigSummary();
-      this.updateComposerHint();
       return;
     }
     const profile = this.profileState.profiles.find((candidate) => candidate.id === id);
@@ -388,7 +267,6 @@ export class ChatPanelController {
       this.elements.configStatus.textContent = `Using ${profile.name}.`;
       this.elements.configStatus.className = "chat-config-status is-success";
     }
-    this.updateComposerHint();
   }
 
   private deleteSelectedProfile(): void {
@@ -418,15 +296,6 @@ export class ChatPanelController {
       this.elements.configStatus.textContent = profile ? `Removed ${profile.name}.` : "Model removed.";
       this.elements.configStatus.className = "chat-config-status is-success";
     }
-    this.updateComposerHint();
-  }
-
-  private updateComposerHint(): void {
-    this.elements.composerHint.textContent = this.selection
-      ? "This passage will be included with your next question."
-      : this.isCurrentConfigValid()
-        ? "Your document stays in this browser until you send a prompt."
-        : "Add a provider key above to start chatting.";
   }
 
   private startNewModel(): void {
@@ -444,7 +313,6 @@ export class ChatPanelController {
     this.invalidateModels();
     this.syncConfigFromForm();
     this.updateConfigSummary();
-    this.updateComposerHint();
     elements.configStatus.textContent = `${preset.label} defaults filled in. Fetch its available models to continue.`;
     elements.configStatus.className = "chat-config-status";
   }
@@ -552,7 +420,6 @@ export class ChatPanelController {
     this.populateReasoningEfforts(modelId, previousEffort);
     this.syncConfigFromForm();
     this.updateConfigSummary();
-    this.updateComposerHint();
   }
 
   private async fetchModels(): Promise<void> {
@@ -586,7 +453,6 @@ export class ChatPanelController {
       elements.configStatus.textContent = "Models loaded. Choose a model and reasoning intensity, then save.";
       elements.configStatus.className = "chat-config-status is-success";
       this.updateConfigSummary();
-      this.updateComposerHint();
     } catch (error) {
       if (!(error instanceof Error && error.name === "AbortError")) {
         this.setModelCatalog([], "", "", "", "");
@@ -645,10 +511,8 @@ export class ChatPanelController {
       ? `${selected.name} · ${selected.model}${selectedEffort ? ` · ${selectedEffort}` : ""}`
       : hasConfig
         ? `${current.model}${current.reasoningEffort ? ` · ${current.reasoningEffort}` : ""} · unsaved changes`
-        : "Set up a model to start";
-    elements.configToggleAction.textContent = hasConfig ? "Edit" : "Set up";
+        : "Set up a model";
     elements.statusDot.classList.toggle("is-ready", hasConfig);
-    elements.statusDot.setAttribute("aria-label", hasConfig ? "Model ready" : "Model not configured");
   }
 
   private isCurrentConfigValid(): boolean {
@@ -695,7 +559,6 @@ export class ChatPanelController {
       elements.configStatus.textContent = `Connection works — ${answer.slice(0, 120)}`;
       elements.configStatus.className = "chat-config-status is-success";
       this.updateConfigSummary();
-      this.updateComposerHint();
     } catch (error) {
       if (!(error instanceof Error && error.name === "AbortError")) {
         elements.configStatus.textContent = error instanceof Error ? error.message : "The connection test failed.";
@@ -708,71 +571,5 @@ export class ChatPanelController {
         elements.testLabel.textContent = "Test connection";
       }
     }
-  }
-
-  private async send(): Promise<void> {
-    const prompt = this.elements.prompt.value.trim();
-    if (!prompt || this.requestController) return;
-    if (!this.isCurrentConfigValid()) {
-      this.configOpen = true;
-      this.elements.configForm.hidden = false;
-      this.elements.configToggle.setAttribute("aria-expanded", "true");
-      this.elements.configStatus.textContent = "Finish the model setup before sending a message.";
-      this.elements.configStatus.className = "chat-config-status is-error";
-      if (!this.elements.apiKey.value.trim()) this.elements.apiKey.focus();
-      else if (!this.elements.baseUrl.value.trim()) this.elements.baseUrl.focus();
-      else this.elements.modelSelect.focus();
-      return;
-    }
-    this.syncConfigFromForm();
-
-    const userContent = this.selection ? `${selectionPrompt(this.selection)}\n\nQuestion: ${prompt}` : prompt;
-    const userMessage: ChatMessage = { role: "user", content: userContent };
-    this.messages.push(userMessage);
-    this.elements.prompt.value = "";
-    this.renderMessages();
-    this.setBusy(true);
-    const requestController = new AbortController();
-    this.requestController = requestController;
-
-    try {
-      const answer = await requestChatCompletion(
-        this.config,
-        this.messages,
-        requestController.signal,
-        fetch,
-      );
-      if (this.requestController === requestController) {
-        this.messages.push({ role: "assistant", content: answer });
-        this.renderMessages();
-      }
-    } catch (error) {
-      if (this.requestController === requestController && !(error instanceof Error && error.name === "AbortError")) {
-        const message = error instanceof Error ? error.message : "The model request could not be completed.";
-        this.messages.push({ role: "assistant", content: `I couldn't reach the model: ${message}` });
-        this.renderMessages();
-      }
-    } finally {
-      if (this.requestController === requestController) {
-        this.requestController = null;
-        this.setBusy(false);
-      }
-    }
-  }
-
-  private setBusy(busy: boolean): void {
-    this.elements.sendButton.disabled = busy;
-    this.elements.prompt.disabled = busy;
-    this.elements.sendButton.classList.toggle("is-loading", busy);
-    this.elements.sendButton.textContent = busy ? "Thinking…" : "Send";
-  }
-
-  private renderMessages(): void {
-    this.elements.emptyState.hidden = this.messages.length > 0;
-    this.elements.messageList.querySelectorAll(".chat-message").forEach((message) => message.remove());
-    const fragment = document.createDocumentFragment();
-    for (const message of this.messages) fragment.append(createMessageElement(message));
-    this.elements.messageList.append(fragment);
-    this.elements.messageList.scrollTop = this.elements.messageList.scrollHeight;
   }
 }

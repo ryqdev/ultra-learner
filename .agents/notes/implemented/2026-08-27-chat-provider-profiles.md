@@ -10,6 +10,8 @@ The AI guide's provider form only kept one configuration in tab memory, so a lea
 
 The provider form now manages named profiles through a versioned, validated `localStorage` record scoped to the application's origin. A profile contains a user-facing name, API key, Base URL, model, and optional reasoning intensity; the active profile is restored when the reader starts and can be changed or deleted without changing PDF sessions. The form requires manual entry only for the API key and Base URL. A Fetch models action calls a dedicated same-origin `POST /api/chat/models` route; Bun forwards a credential-bearing GET request to the provider's `/models` endpoint, and the browser normalizes standard model records plus common reasoning-capability metadata into model and intensity selectors. A dedicated same-origin `POST /api/chat/test` route sends one fixed, minimal completion request through the existing Bun proxy. Normal chat requests also default to the proxy, while direct browser transport remains an explicit library-only compatibility option. The form presents a guided setup flow with provider presets for common hosted and local OpenAI-compatible gateways, inline field help, API-key visibility control, a compact current-model summary, and explicit save/use and remove actions.
 
+The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) removes the conversation UI while keeping this profile, discovery, and connection-test flow as the guide's sole purpose.
+
 ## Alternatives considered
 
 **Keep one tab-only configuration.** This avoids persisting secrets, but forces repetitive setup and does not meet the requirement to reuse a model across sessions.

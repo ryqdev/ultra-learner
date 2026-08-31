@@ -62,7 +62,7 @@ export interface PdfReaderElements {
 
 export interface PdfReaderCallbacks {
   onFileAccepted: () => void;
-  onSelection: (selection: SelectionContext | null) => void;
+  onSelection?: (selection: SelectionContext | null) => void;
   onToast: (message: string) => void;
 }
 
@@ -480,13 +480,13 @@ export class PdfReaderController {
   }
 
   private publishSelection(selection: SelectionContext): void {
-    this.callbacks.onSelection(selection);
+    this.callbacks.onSelection?.(selection);
   }
 
   private clearSelection(): void {
     window.getSelection()?.removeAllRanges();
     this.elements.boxSelection.hidden = true;
-    this.callbacks.onSelection(null);
+    this.callbacks.onSelection?.(null);
   }
 
   private animateVimScroll(key: VimScrollKey): void {
@@ -552,7 +552,7 @@ export class PdfReaderController {
     this.elements.textLayer.replaceChildren();
     this.elements.annotationLayer.replaceChildren();
     this.state.renderVersion += 1;
-    this.callbacks.onSelection(null);
+    this.callbacks.onSelection?.(null);
   }
 
   private setLoading(message: string): void {
