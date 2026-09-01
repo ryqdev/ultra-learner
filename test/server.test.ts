@@ -47,7 +47,8 @@ describe("web server", () => {
     expect(page).not.toContain('id="sample-button"');
     expect(page).not.toContain('id="site-footer"');
     expect(page).toContain("Choose PDF");
-    expect(page).toContain('id="chat-panel"');
+    expect(page).toContain('class="reader-view chat-collapsed" id="reader-view"');
+    expect(page).toContain('class="chat-panel is-collapsed" id="chat-panel"');
     expect(page).toContain('id="chat-resize-handle"');
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
@@ -60,6 +61,7 @@ describe("web server", () => {
     expect(page).toContain('id="chat-config-summary"');
     expect(page).toContain("Model configuration");
     expect(page).toContain('class="ai-panel-trigger"');
+    expect(page).toContain('aria-label="Open AI guide" aria-controls="chat-panel" aria-expanded="false"');
     expect(page).toContain('aria-controls="chat-panel"');
     expect(page).toContain("Save &amp; use model");
     expect(page).toContain("Ollama · local");

@@ -348,6 +348,7 @@ function showReader(title = "Reading"): void {
   setLibraryActive(false);
   setTopbarTitle(title);
   reader.showReader();
+  setChatCollapsed(true);
   window.requestAnimationFrame(fitChatPanelWidth);
 }
 

@@ -184,7 +184,7 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = false;
     this.elements.readerError.hidden = true;
     this.elements.canvasFrame.hidden = true;
-    this.elements.readerView.classList.add("sidebar-hidden");
+    this.elements.readerView.classList.remove("sidebar-hidden");
   }
 
   public async loadPdf(data: Uint8Array, filename: string): Promise<boolean> {
