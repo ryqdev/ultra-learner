@@ -82,6 +82,9 @@ See [`docs/architecture.md`](docs/architecture.md) for the product boundaries an
 the repository's [AGENTS.md](https://github.com/ryqdev/ultra-learner/blob/main/AGENTS.md)
 for the working agreement.
 
+Maintainers: see [the release guide](https://github.com/ryqdev/ultra-learner/blob/main/docs/releasing.md)
+for release PRs, first-publication setup, and upload retries.
+
 ## License
 
 [MIT](LICENSE). PDF.js is distributed separately under its own license.
