@@ -16,12 +16,12 @@ scripts/             Repository checks invoked by the top-level gate.
 ## Commands
 
 ```sh
-bun run start -- <name>  # Run the example CLI.
+bun run start             # Start the local PDF reader.
 bun test                  # Run behavior tests.
 bun run check             # Run every required local gate.
 ```
 
-Use Bun 1.3 or newer exclusively for dependency management, scripts, and tests. Do not create lockfiles or use commands from another package manager. The starter has no third-party runtime dependencies; Bun creates `bun.lock` when dependencies are added.
+Use Bun 1.3 or newer exclusively for dependency management, scripts, tests, and packing. Bun owns `bun.lock`; do not create another package manager's lockfile. The only exception is the CI publication step: npm CLI may upload the already tested Bun tarball using npm Trusted Publishing. See [docs/releasing.md](docs/releasing.md) for the release contract.
 
 ## Working agreement
 

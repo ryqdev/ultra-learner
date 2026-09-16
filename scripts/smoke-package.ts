@@ -19,9 +19,9 @@ export async function run(command: string[], cwd: string, env = process.env): Pr
   return stdout;
 }
 
-export async function smokePackage(cwd: string, name: string, version: string, env: NodeJS.ProcessEnv): Promise<void> {
+export async function smokePackage(cwd: string, name: string, version: string, env: NodeJS.ProcessEnv, allowInstall = false): Promise<void> {
   // Exercise bunx's bin lookup and the package's Bun shebang without --bun.
-  const command = [process.execPath, "x", "--no-install", "--package", name, "ultra-learner"];
+  const command = [process.execPath, "x", ...(allowInstall ? [] : ["--no-install"]), "--package", name, "ultra-learner"];
   assert.equal((await run([...command, "--version"], cwd, env)).trim(), version);
   assert.match(await run([...command, "--help"], cwd, env), /Usage: ultra-learner/);
 
