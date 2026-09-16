@@ -1,7 +1,19 @@
 {
-  "name": "ultra-learner",
+  "name": "@ryqdev/ultra-learner",
   "version": "0.1.0",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryqdev/ultra-learner.git"
+  },
+  "bin": {
+    "ultra-learner": "src/index.ts"
+  },
+  "files": ["src/", "public/", "docs/architecture.md"],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "description": "A local-first PDF reader built with Bun and TypeScript",
   "type": "module",
   "packageManager": "bun@1.4.0",
@@ -13,6 +25,7 @@
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "test:package": "bun scripts/test-package.ts",
     "check:agents": "bun scripts/check-agent-notes.ts",
     "check": "bun run typecheck && bun test && bun run check:agents"
   },

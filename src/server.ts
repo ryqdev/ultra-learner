@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { extname, join, normalize, resolve } from "node:path";
+import { dirname, extname, join, normalize, resolve } from "node:path";
 
 import {
   CHAT_PROXY_PATH,
@@ -378,6 +378,8 @@ function isFile(path: string): boolean {
 export function createAppServer(options: AppServerOptions = {}): Bun.Server<undefined> {
   const root = options.root ?? resolve(import.meta.dir, "..");
   const publicRoot = join(root, "public");
+  // Dependencies may be hoisted outside this package after installation.
+  const pdfRoot = dirname(Bun.resolveSync("pdfjs-dist/package.json", import.meta.dir));
   const sessionStore = options.sessionStore ?? new SessionStore({ root: options.sessionRoot });
   const chatFetcher = options.chatFetcher ?? fetch;
 
@@ -527,11 +529,11 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       }
 
       if (url.pathname === "/assets/pdf.worker.mjs") {
-        return responseForFile(join(root, "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"));
+        return responseForFile(join(pdfRoot, "legacy", "build", "pdf.worker.min.mjs"));
       }
 
       if (url.pathname === "/assets/pdf_viewer.css") {
-        return responseForFile(join(root, "node_modules", "pdfjs-dist", "web", "pdf_viewer.css"));
+        return responseForFile(join(pdfRoot, "web", "pdf_viewer.css"));
       }
 
       const pdfAssetDirectories: Record<string, string> = {
@@ -544,7 +546,7 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       for (const [urlPrefix, directory] of Object.entries(pdfAssetDirectories)) {
         if (!url.pathname.startsWith(urlPrefix)) continue;
         const filename = url.pathname.slice(urlPrefix.length);
-        const pdfAssetPath = safeAssetPath(join(root, "node_modules", "pdfjs-dist", directory), `/${filename}`);
+        const pdfAssetPath = safeAssetPath(join(pdfRoot, directory), `/${filename}`);
         if (pdfAssetPath && isFile(pdfAssetPath)) return responseForFile(pdfAssetPath);
       }
 
