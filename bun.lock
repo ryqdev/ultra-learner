@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ai-native-development",
+      "name": "@ryqdev/ultra-learner",
       "dependencies": {
         "pdfjs-dist": "^6.2.108",
       },

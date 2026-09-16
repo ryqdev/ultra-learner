@@ -47,7 +47,7 @@ The thumbnail rail is a flex-constrained vertical scroll region independent from
 
 `src/session-store.ts` owns filesystem access. The default root is `~/.ultra-learner`; each upload creates `sessions/<id>/metadata.json` and `sessions/<id>/document.pdf`. Metadata is versioned and contains the opaque ID, original filename, byte size, and creation time. IDs and filenames are validated at the boundary, stored files are never addressed by user-provided paths, and incomplete or malformed directories are omitted from history. Creating another session never overwrites an earlier upload. An explicit, confirmed delete removes the selected session directory and its saved PDF; deleting the active session returns the browser to Library.
 
-The browser bundle is built on request so `bun run start` remains the only setup command after dependency installation. Production packaging and asset fingerprinting are intentionally deferred until deployment is in scope.
+The browser bundle is built on request so `bun run start` remains the only setup command after dependency installation. The npm package includes the TypeScript sources and `public/` assets; its `ultra-learner` command uses a Bun shebang and supports help, version, and port selection. Users need Bun but do not need a repository checkout or a separate build step. Static application paths are relative to the installed package, while PDF.js assets are located through module resolution so hoisted dependencies work. Asset fingerprinting remains deferred.
 
 ## PDF rendering dependency
 
@@ -61,6 +61,7 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 - Session tests cover metadata validation, filesystem layout, ordering, corrupt-entry handling, upload and deletion transport, and history formatting.
 - The merged reader behavior also covers Vim navigation deltas through the reader-state helpers.
 - HTTP tests cover the application shell, browser bundle, health endpoint, chat/model proxy forwarding, session creation/list/retrieval/deletion, method boundaries, and static-file containment.
+- `bun run test:package` packs the public file allowlist, installs the tarball with hoisted dependencies and an isolated cache, and runs the real bunx command outside the repository. It checks help/version, server startup, the browser bundle, and PDF.js worker, stylesheet, font, and WASM assets without touching saved sessions.
 - `bun run typecheck` covers server, browser, test, and repository-script TypeScript.
 - Browser verification exercises the generated sample through the real PDF worker, canvas renderer, and responsive UI.
 

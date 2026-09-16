@@ -8,6 +8,19 @@ This is the first product prototype. It includes a built-in four-page field guid
 
 Requires [Bun](https://bun.sh/) 1.3 or newer.
 
+After the first npm release:
+
+```sh
+bunx @ryqdev/ultra-learner
+```
+
+Open the printed URL in your browser. Use `--port 4100` to choose a port,
+`--help` for usage, or `--version` to check the installed version. The package
+requires Bun at runtime. Use `bunx @ryqdev/ultra-learner@latest` to request the
+latest release, or specify a version to reproduce an older release.
+
+To run from a repository checkout:
+
 ```sh
 bun install
 bun run start
@@ -42,6 +55,7 @@ bun run dev         # Start with Bun watch mode.
 bun test            # Run behavior and server tests.
 bun run typecheck   # Check TypeScript without emitting files.
 bun run check       # Run every required local gate.
+bun run test:package # Pack and test a clean consumer installation (requires network).
 ```
 
 Set `PORT` to use another port:
@@ -64,4 +78,10 @@ docs/               Stable architecture guidance.
 .agents/            Project decisions and reusable agent workflows.
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the product boundaries and [`AGENTS.md`](AGENTS.md) for the repository working agreement.
+See [`docs/architecture.md`](docs/architecture.md) for the product boundaries and
+the repository's [AGENTS.md](https://github.com/ryqdev/ultra-learner/blob/main/AGENTS.md)
+for the working agreement.
+
+## License
+
+[MIT](LICENSE). PDF.js is distributed separately under its own license.
