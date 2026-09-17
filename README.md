@@ -8,7 +8,7 @@ This is the first product prototype. It includes a built-in four-page field guid
 
 Requires [Bun](https://bun.sh/) 1.3 or newer.
 
-After the first npm release:
+After the [first npm release](docs/releasing.md#first-publish-and-trusted-publisher-setup):
 
 ```sh
 bunx @ryqdev/ultra-learner
@@ -81,6 +81,9 @@ docs/               Stable architecture guidance.
 See [`docs/architecture.md`](docs/architecture.md) for the product boundaries and
 the repository's [AGENTS.md](https://github.com/ryqdev/ultra-learner/blob/main/AGENTS.md)
 for the working agreement.
+
+See [Releasing to npm](docs/releasing.md) for release PRs, version rules,
+Trusted Publisher setup, and publishing retries.
 
 ## License
 
