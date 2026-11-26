@@ -87,8 +87,8 @@ export class SessionStore {
   private cleanup: Promise<void> | undefined;
   // Uploads being moved into place, one at a time.
   private commits: Promise<unknown> = Promise.resolve();
-  // Position writes still running or waiting, per session.
-  private readonly progressWrites = new Map<string, Promise<void>>();
+  // Changes to one session's directory that are still running or waiting.
+  private readonly sessionChanges = new Map<string, Promise<unknown>>();
   // The newest numbered position update applied to each session since this store started.
   private readonly appliedProgress = new Map<string, ProgressOrder>();
 
@@ -206,14 +206,20 @@ export class SessionStore {
     if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
     if (!isSessionId(id)) throw new SessionNotFoundError();
 
-    const write = (this.progressWrites.get(id) ?? Promise.resolve())
-      .catch(() => undefined)
-      .then(() => this.writeProgress(id, page, order));
-    this.progressWrites.set(id, write);
+    await this.inSessionOrder(id, () => this.writeProgress(id, page, order));
+  }
+
+  /**
+   * Run a change to one session's directory after every earlier change to it
+   * has finished, so a position write and a delete never work on it at once.
+   */
+  private async inSessionOrder<T>(id: string, change: () => Promise<T>): Promise<T> {
+    const queued = (this.sessionChanges.get(id) ?? Promise.resolve()).catch(() => undefined).then(change);
+    this.sessionChanges.set(id, queued);
     try {
-      await write;
+      return await queued;
     } finally {
-      if (this.progressWrites.get(id) === write) this.progressWrites.delete(id);
+      if (this.sessionChanges.get(id) === queued) this.sessionChanges.delete(id);
     }
   }
 
@@ -238,16 +244,18 @@ export class SessionStore {
 
   public async deleteSession(id: string): Promise<void> {
     if (!isSessionId(id)) throw new SessionNotFoundError();
-    await this.getSessionDocument(id);
-    this.appliedProgress.delete(id);
-    try {
-      await rm(this.sessionDirectory(id), { recursive: true });
-    } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-        throw new SessionNotFoundError();
+    await this.inSessionOrder(id, async () => {
+      await this.getSessionDocument(id);
+      this.appliedProgress.delete(id);
+      try {
+        await rm(this.sessionDirectory(id), { recursive: true });
+      } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+          throw new SessionNotFoundError();
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   }
 
   private get sessionsRoot(): string {

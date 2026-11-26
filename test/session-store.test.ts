@@ -162,6 +162,22 @@ describe("local PDF session store", () => {
     expect(await lastPage()).toBe(3);
   });
 
+  test("finishes pending position updates before deleting their session", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "reading" });
+    await store.createSession("notes.pdf", pdf);
+    const outcome = (work: Promise<void>): Promise<string> => work.then(() => "done", (error: Error) => error.name);
+
+    const before = Array.from({ length: 8 }, (_, index) => outcome(store.saveProgress("reading", index + 1)));
+    const deleted = outcome(store.deleteSession("reading"));
+    const after = outcome(store.saveProgress("reading", 99));
+
+    expect(await Promise.all(before)).toEqual(Array.from({ length: 8 }, () => "done"));
+    expect(await deleted).toBe("done");
+    expect(await after).toBe("SessionNotFoundError");
+    expect(await readdir(join(root, "sessions"))).toEqual([]);
+  });
+
   test("keeps one session when identical uploads arrive together", async () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root });

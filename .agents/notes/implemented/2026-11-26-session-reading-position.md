@@ -30,7 +30,7 @@ This supersedes the earlier consequence that reading position remains ephemeral.
 
 - Reopening a document returns to the page where it was left, across restarts and across ports.
 - Session directories now contain one small file that changes; `metadata.json` and `document.pdf` are still never rewritten.
-- Deleting a session removes its position with it.
+- Deleting a session removes its position with it. The delete waits for that session's pending position writes and later ones find no session, so the two never work on the directory at once.
 - A failed position save is silent: it never interrupts reading, and the cost is reopening one page off.
 - The applied sequence numbers live in the server's memory. After a restart the first update from any writer is applied, which is correct because no earlier request can still be in flight.
 - A summary whose `lastPage` is not a usable page number is read as having none; the session stays listed.
