@@ -33,7 +33,7 @@ describe("browser session transport", () => {
       return Response.json({ session }, { status: 201 });
     };
 
-    expect(await saveSession(file, data, fetcher as SessionFetch)).toEqual(session);
+    expect(await saveSession(file, fetcher as SessionFetch)).toEqual(session);
     expect(request?.method).toBe("POST");
     expect(request?.headers.get("x-ultra-learner-filename")).toBe(encodeURIComponent(file.name));
     expect(new Uint8Array(await request!.arrayBuffer())).toEqual(data);

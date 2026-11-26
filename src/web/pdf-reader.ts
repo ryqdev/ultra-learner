@@ -66,10 +66,6 @@ export interface PdfReaderCallbacks {
   onToast: (message: string) => void;
 }
 
-export interface OpenFileOptions {
-  persist?: (data: Uint8Array) => Promise<void>;
-}
-
 interface ReaderState {
   document: PDFDocumentProxy | null;
   loadingTask: PDFDocumentLoadingTask | null;
@@ -323,11 +319,12 @@ export class PdfReaderController {
     if (this.state.document && this.state.zoom === 1) void this.renderCurrentPage(true);
   }
 
-  public async openFile(file: File, options: OpenFileOptions = {}): Promise<void> {
+  /** Open a local file and report whether it became the document on screen. */
+  public async openFile(file: File): Promise<boolean> {
     const validationError = pdfFileValidationError(file);
     if (validationError) {
       this.callbacks.onToast(validationError);
-      return;
+      return false;
     }
 
     const openVersion = ++this.openFileVersion;
@@ -342,22 +339,14 @@ export class PdfReaderController {
       data = new Uint8Array(await file.arrayBuffer());
     } catch (error) {
       if (openVersion === this.openFileVersion) this.showError(error);
-      return;
+      return false;
     }
-    if (openVersion !== this.openFileVersion) return;
+    if (openVersion !== this.openFileVersion) return false;
 
-    // PDF.js may transfer the supplied buffer to its worker, so retain the
-    // original bytes for the local session write after parsing succeeds.
-    const loaded = await this.loadPdf(data.slice(), file.name);
-    if (!loaded || openVersion !== this.openFileVersion) return;
-
-    if (options.persist) {
-      try {
-        await options.persist(data);
-      } catch (error) {
-        this.callbacks.onToast(error instanceof Error ? error.message : "Unable to save this PDF to your history.");
-      }
-    }
+    // PDF.js may transfer this buffer to its worker. Nothing reuses it: saving
+    // the session uploads the File again rather than holding a second copy.
+    const loaded = await this.loadPdf(data, file.name);
+    return loaded && openVersion === this.openFileVersion;
   }
 
   public destroy(): void {

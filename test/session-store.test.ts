@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { SessionNotFoundError, SessionStore } from "../src/session-store.ts";
+import { SessionNotFoundError, SessionStore, SessionTooLargeError } from "../src/session-store.ts";
 
 const createdRoots: string[] = [];
 const pdf = new TextEncoder().encode("%PDF-1.7\nlocal session fixture\n%%EOF\n");
@@ -16,6 +16,15 @@ async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "ultra-learner-session-"));
   createdRoots.push(root);
   return root;
+}
+
+function streamOf(...chunks: Uint8Array[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
 }
 
 describe("local PDF session store", () => {
@@ -66,6 +75,70 @@ describe("local PDF session store", () => {
     await expect(store.getSessionDocument(deleted.id)).rejects.toBeInstanceOf(SessionNotFoundError);
     await expect(store.deleteSession(deleted.id)).rejects.toBeInstanceOf(SessionNotFoundError);
     await expect(store.deleteSession("../session-keep")).rejects.toBeInstanceOf(SessionNotFoundError);
+  });
+
+  test("stores an upload that arrives in pieces", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "streamed" });
+
+    const session = await store.createSession(
+      "streamed.pdf",
+      streamOf(pdf.subarray(0, 3), pdf.subarray(3, 20), pdf.subarray(20)),
+    );
+
+    expect(session.fileSize).toBe(pdf.byteLength);
+    expect(await readFile(join(root, "sessions", "streamed", "document.pdf"))).toEqual(Buffer.from(pdf));
+    expect((await store.getSessionDocument("streamed")).summary).toEqual(session);
+  });
+
+  test("leaves nothing behind when an upload is rejected or interrupted", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root });
+    const limited = new SessionStore({ root, maximumFileSize: pdf.byteLength + 8 });
+    const interrupted = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("connection lost"));
+      },
+    });
+
+    await expect(limited.createSession("large.pdf", streamOf(pdf, new Uint8Array(16))))
+      .rejects.toBeInstanceOf(SessionTooLargeError);
+    await expect(store.createSession("empty.pdf", new Uint8Array())).rejects.toThrow("empty");
+    await expect(store.createSession("zeros.pdf", streamOf(new Uint8Array(4_096)))).rejects.toThrow("PDF header");
+    await expect(store.createSession("cut.pdf", interrupted)).rejects.toThrow("connection lost");
+
+    expect(await readdir(join(root, "sessions"))).toEqual([]);
+    expect(await store.listSessions()).toEqual([]);
+  });
+
+  test("clears stale leftovers of interrupted uploads and nothing else", async () => {
+    const root = await temporaryRoot();
+    const sessions = join(root, "sessions");
+    const valid = await new SessionStore({ root, createId: () => "valid-session" }).createSession("valid.pdf", pdf);
+    const leftovers: Array<[directory: string, file: string, contents: string | Uint8Array]> = [
+      [".incoming-abandoned", "document.pdf", pdf],
+      ["document-without-metadata", "document.pdf", pdf],
+      ["corrupt-session", "metadata.json", "not JSON\n"],
+      ["unrelated-folder", "notes.txt", "keep me"],
+    ];
+    for (const [directory, file, contents] of leftovers) {
+      await mkdir(join(sessions, directory));
+      await writeFile(join(sessions, directory, file), contents);
+    }
+
+    // A reader started moments later has to assume those uploads are still running.
+    expect(await new SessionStore({ root }).listSessions()).toEqual([valid]);
+    expect((await readdir(sessions)).sort()).toEqual([
+      ".incoming-abandoned",
+      "corrupt-session",
+      "document-without-metadata",
+      "unrelated-folder",
+      "valid-session",
+    ]);
+
+    const startedLater = new SessionStore({ root, clock: () => new Date(Date.now() + 2 * 60 * 60 * 1000) });
+    expect(await startedLater.listSessions()).toEqual([valid]);
+    expect((await readdir(sessions)).sort()).toEqual(["corrupt-session", "unrelated-folder", "valid-session"]);
   });
 
   test("omits corrupt or incomplete entries from history", async () => {

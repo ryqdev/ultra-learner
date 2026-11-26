@@ -18,11 +18,17 @@ export function isSessionId(value: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(value);
 }
 
-export function sessionFilenameValidationError(filename: string, fileSize: number): string | null {
+/** Validate the name alone, for callers that learn the size only while the bytes arrive. */
+export function sessionNameValidationError(filename: string): string | null {
   if (!filename || filename !== filename.trim()) return "The PDF filename is invalid.";
   if (filename.length > MAXIMUM_SESSION_FILENAME_LENGTH) return "The PDF filename is too long.";
   if (/[/\\\u0000-\u001f\u007f]/.test(filename)) return "The PDF filename is invalid.";
-  return pdfFileValidationError({ name: filename, type: "application/pdf", size: fileSize });
+  return null;
+}
+
+export function sessionFilenameValidationError(filename: string, fileSize: number): string | null {
+  return sessionNameValidationError(filename)
+    ?? pdfFileValidationError({ name: filename, type: "application/pdf", size: fileSize });
 }
 
 export function hasPdfHeader(data: Uint8Array): boolean {

@@ -449,6 +449,17 @@ describe("web server", () => {
   test("rejects malformed session uploads and inaccessible documents", async () => {
     server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
 
+    const emptyResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("notes.pdf") },
+    });
+    expect(emptyResponse.status).toBe(400);
+    expect(await emptyResponse.json()).toEqual({ error: { message: "That PDF is empty." } });
+
+    const unnamedResponse = await fetch(new URL("/api/sessions", server.url), { method: "POST", body: "%PDF-1.7\n" });
+    expect(unnamedResponse.status).toBe(400);
+    expect(await unnamedResponse.json()).toEqual({ error: { message: "The PDF filename is invalid." } });
+
     const invalidResponse = await fetch(new URL("/api/sessions", server.url), {
       method: "POST",
       headers: { "X-Ultra-Learner-Filename": encodeURIComponent("notes.pdf") },

@@ -65,6 +65,9 @@ let sessions: SessionSummary[] = [];
 let openingSessionId: string | null = null;
 let deletingSessionId: string | null = null;
 let activeSessionId: string | null = null;
+// Advances whenever the reader is pointed at something else, so work that
+// finishes late can tell it no longer describes the document on screen.
+let documentToken = 0;
 
 function showToast(message: string): void {
   toast.textContent = message;
@@ -156,6 +159,7 @@ const reader = new PdfReaderController(
 );
 
 function showWelcome(): void {
+  documentToken += 1;
   reader.reset();
   fileInput.value = "";
   activeSessionId = null;
@@ -249,13 +253,15 @@ async function refreshHistory(): Promise<void> {
 
 async function openSession(session: SessionSummary): Promise<void> {
   if (openingSessionId || deletingSessionId) return;
+  const token = ++documentToken;
   openingSessionId = session.id;
   renderHistory();
   try {
     const data = await loadSessionPdf(session);
+    if (token !== documentToken) return;
     showReader(session.filename);
     const loaded = await reader.loadPdf(data, session.filename);
-    if (loaded) {
+    if (loaded && token === documentToken) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
     }
@@ -325,19 +331,25 @@ historyList.addEventListener("click", (event) => {
 });
 
 async function openUploadedFile(file: File): Promise<void> {
+  const token = ++documentToken;
   activeSessionId = null;
   setTopbarTitle(file.name);
   renderHistory();
-  await reader.openFile(file, {
-    persist: async (data) => {
-      const session = await saveSession(file, data);
-      sessions = [session, ...sessions];
+  if (!await reader.openFile(file)) return;
+
+  try {
+    const session = await saveSession(file);
+    sessions = [session, ...sessions.filter((candidate) => candidate.id !== session.id)];
+    // The upload can outlast the document: only claim the reader if it still shows this file.
+    if (token === documentToken) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
-      renderHistory();
-      showToast("PDF saved to your local history.");
-    },
-  });
+    }
+    renderHistory();
+    showToast("PDF saved to your local history.");
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "Unable to save this PDF to your history.");
+  }
 }
 
 function showReader(title = "Reading"): void {

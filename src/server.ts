@@ -16,7 +16,12 @@ import {
   type ChatMessage,
 } from "./lib/chat.ts";
 import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
-import { SessionNotFoundError, SessionStore, type SessionStoreOptions } from "./session-store.ts";
+import {
+  SessionNotFoundError,
+  SessionStore,
+  SessionTooLargeError,
+  type SessionStoreOptions,
+} from "./session-store.ts";
 
 export interface AppServerOptions {
   port?: number;
@@ -404,11 +409,11 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
           }
 
           try {
-            const data = await readBodyBytes(request.body, MAXIMUM_PDF_FILE_SIZE);
-            const session = await sessionStore.createSession(filename, data);
+            // The store writes the body to disk as it arrives, so a large PDF is never held in memory here.
+            const session = await sessionStore.createSession(filename, request.body ?? new Uint8Array());
             return Response.json({ session }, { status: 201, headers: { "Cache-Control": "no-store" } });
           } catch (error) {
-            if (error instanceof PayloadTooLargeError) return jsonError("That PDF is larger than 100 MB.", 413);
+            if (error instanceof SessionTooLargeError) return jsonError(error.message, 413);
             if (error instanceof TypeError) return jsonError(error.message, 400);
             console.error(error);
             return jsonError("Unable to save the PDF session.", 500);

@@ -38,7 +38,6 @@ export async function listSessions(fetcher: SessionFetch = fetch): Promise<Sessi
 
 export async function saveSession(
   file: File,
-  data: Uint8Array,
   fetcher: SessionFetch = fetch,
 ): Promise<SessionSummary> {
   const response = await fetcher("/api/sessions", {
@@ -47,7 +46,8 @@ export async function saveSession(
       "Content-Type": "application/pdf",
       "X-Ultra-Learner-Filename": encodeURIComponent(file.name),
     },
-    body: new Blob([data as Uint8Array<ArrayBuffer>], { type: "application/pdf" }),
+    // The browser streams the File from disk; no copy of its bytes is kept in page memory.
+    body: file,
   });
   const result = await responseJson(response);
   if (!response.ok) throw responseError(result, "Unable to save this PDF to your history.");
