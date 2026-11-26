@@ -27,7 +27,7 @@ The browser continues to own PDF parsing and rendering. It validates the file at
 ## Consequences
 
 - Uploaded PDF bytes now cross the browser/server boundary, but remain on the same device under the local application's control; privacy copy and architecture documentation must describe that boundary accurately.
-- Repeated uploads intentionally create separate sessions, even when filenames or bytes match.
+- Repeated uploads intentionally create separate sessions, even when filenames or bytes match. The later [reuse of identical uploads](2026-11-26-reuse-identical-uploads.md) decision supersedes this for an upload whose name and bytes both match a stored session.
 - Disk use grows until the learner explicitly deletes sessions; automatic retention and bulk deletion remain out of scope.
 - Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral.
 - The workspace sidebar is a presentation and navigation layer over the same session API; collapsing it or opening it as a mobile drawer does not alter stored sessions.

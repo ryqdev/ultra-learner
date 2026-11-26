@@ -338,14 +338,16 @@ async function openUploadedFile(file: File): Promise<void> {
 
   try {
     const session = await saveSession(file);
-    sessions = [session, ...sessions.filter((candidate) => candidate.id !== session.id)];
+    // The server answers with the stored session when this exact PDF is already in history.
+    const alreadyStored = sessions.some((candidate) => candidate.id === session.id);
+    if (!alreadyStored) sessions = [session, ...sessions];
     // The upload can outlast the document: only claim the reader if it still shows this file.
     if (token === documentToken) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
     }
     renderHistory();
-    showToast("PDF saved to your local history.");
+    showToast(alreadyStored ? "This PDF is already in your local history." : "PDF saved to your local history.");
   } catch (error) {
     showToast(error instanceof Error ? error.message : "Unable to save this PDF to your history.");
   }

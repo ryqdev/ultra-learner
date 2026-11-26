@@ -1,4 +1,5 @@
-import { constants } from "node:fs";
+import { createHash } from "node:crypto";
+import { constants, createReadStream } from "node:fs";
 import { access, lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +37,12 @@ export interface SessionDocument {
   path: string;
 }
 
+export interface SavedSession {
+  session: SessionSummary;
+  /** True when an identical stored document answered the upload and nothing new was kept. */
+  reused: boolean;
+}
+
 export class SessionNotFoundError extends Error {
   public constructor() {
     super("Session not found");
@@ -48,6 +55,12 @@ export class SessionTooLargeError extends Error {
     super("That PDF is larger than 100 MB.");
     this.name = "SessionTooLargeError";
   }
+}
+
+async function fileDigest(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Uint8Array);
+  return hash.digest("hex");
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -93,15 +106,16 @@ export class SessionStore {
   }
 
   /**
-   * Store an upload as a new session. The bytes are written to a private
-   * incoming directory and only renamed into place once the document and its
-   * metadata are complete, so an interrupted upload never leaves a session
-   * directory that history cannot show or delete.
+   * Store an upload as a session. The bytes are written to a private incoming
+   * directory and only renamed into place once the document and its metadata
+   * are complete, so an interrupted upload never leaves a session directory
+   * that history cannot show or delete. Opening a document that is already
+   * stored under the same name returns that session instead of a second copy.
    */
   public async createSession(
     filename: string,
     source: Uint8Array | ReadableStream<Uint8Array>,
-  ): Promise<SessionSummary> {
+  ): Promise<SavedSession> {
     const nameError = sessionNameValidationError(filename);
     if (nameError) throw new TypeError(nameError);
 
@@ -110,6 +124,11 @@ export class SessionStore {
     await mkdir(incoming, { mode: 0o700 });
     try {
       const fileSize = await this.writeDocument(join(incoming, PDF_FILENAME), source);
+      const existing = await this.findIdenticalSession(filename, fileSize, join(incoming, PDF_FILENAME));
+      if (existing) {
+        await rm(incoming, { recursive: true, force: true });
+        return { session: existing, reused: true };
+      }
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const id = this.createId();
         if (!isSessionId(id)) throw new Error("The generated session ID is invalid.");
@@ -126,7 +145,7 @@ export class SessionStore {
         await writeFile(join(incoming, METADATA_FILENAME), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
         try {
           await rename(incoming, directory);
-          return toSessionSummary(metadata);
+          return { session: toSessionSummary(metadata), reused: false };
         } catch (error) {
           // Another writer claimed this ID between the check and the rename.
           if (!await pathExists(directory)) throw error;
@@ -181,6 +200,30 @@ export class SessionStore {
     await mkdir(this.sessionsRoot, { recursive: true, mode: 0o700 });
     this.cleanup ??= this.removeIncompleteEntries();
     await this.cleanup;
+  }
+
+  /**
+   * Look for a stored session with this name and exactly these bytes. Only
+   * sessions that already match on name and size are read, so an ordinary
+   * first upload costs a directory listing and no hashing.
+   */
+  private async findIdenticalSession(
+    filename: string,
+    fileSize: number,
+    documentPath: string,
+  ): Promise<SessionSummary | null> {
+    const candidates = (await this.listSessions())
+      .filter((session) => session.filename === filename && session.fileSize === fileSize);
+    if (candidates.length === 0) return null;
+    const digest = await fileDigest(documentPath);
+    for (const candidate of candidates) {
+      try {
+        if (await fileDigest(join(this.sessionDirectory(candidate.id), PDF_FILENAME)) === digest) return candidate;
+      } catch {
+        // A stored document that cannot be read is not a match; the upload is kept instead.
+      }
+    }
+    return null;
   }
 
   /** Write the upload to disk as it arrives and return its size once it proves to be a PDF. */

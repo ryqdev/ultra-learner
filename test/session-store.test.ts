@@ -42,8 +42,8 @@ describe("local PDF session store", () => {
       clock: () => times.shift() ?? new Date(0),
     });
 
-    const older = await store.createSession("older.pdf", pdf);
-    const newer = await store.createSession("讲义.pdf", pdf);
+    const { session: older } = await store.createSession("older.pdf", pdf);
+    const { session: newer } = await store.createSession("讲义.pdf", pdf);
 
     expect(older.id).toBe("session-older");
     expect(await store.listSessions()).toEqual([newer, older]);
@@ -66,8 +66,8 @@ describe("local PDF session store", () => {
     const root = await temporaryRoot();
     const ids = ["session-delete", "session-keep"];
     const store = new SessionStore({ root, createId: () => ids.shift() ?? "unexpected-id" });
-    const deleted = await store.createSession("delete.pdf", pdf);
-    const kept = await store.createSession("keep.pdf", pdf);
+    const { session: deleted } = await store.createSession("delete.pdf", pdf);
+    const { session: kept } = await store.createSession("keep.pdf", pdf);
 
     await store.deleteSession(deleted.id);
 
@@ -81,14 +81,41 @@ describe("local PDF session store", () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root, createId: () => "streamed" });
 
-    const session = await store.createSession(
+    const { session, reused } = await store.createSession(
       "streamed.pdf",
       streamOf(pdf.subarray(0, 3), pdf.subarray(3, 20), pdf.subarray(20)),
     );
 
+    expect(reused).toBe(false);
     expect(session.fileSize).toBe(pdf.byteLength);
     expect(await readFile(join(root, "sessions", "streamed", "document.pdf"))).toEqual(Buffer.from(pdf));
     expect((await store.getSessionDocument("streamed")).summary).toEqual(session);
+  });
+
+  test("reuses the stored session when the same PDF is opened again", async () => {
+    const root = await temporaryRoot();
+    const ids = ["first", "renamed", "revised", "unexpected"];
+    const store = new SessionStore({ root, createId: () => ids.shift() ?? "exhausted" });
+    const revised = new TextEncoder().encode("%PDF-1.7\nlocal session FIXTURE\n%%EOF\n");
+    expect(revised.byteLength).toBe(pdf.byteLength);
+
+    const first = await store.createSession("notes.pdf", pdf);
+    const again = await store.createSession("notes.pdf", streamOf(pdf.subarray(0, 10), pdf.subarray(10)));
+    expect(first.reused).toBe(false);
+    expect(again).toEqual({ session: first.session, reused: true });
+
+    // The same bytes under another name, and other bytes under the same name, are different documents.
+    const renamed = await store.createSession("notes-copy.pdf", pdf);
+    const edited = await store.createSession("notes.pdf", revised);
+    expect([renamed.reused, renamed.session.id]).toEqual([false, "renamed"]);
+    expect([edited.reused, edited.session.id]).toEqual([false, "revised"]);
+
+    expect((await readdir(join(root, "sessions"))).sort()).toEqual(["first", "renamed", "revised"]);
+    expect(await store.createSession("notes.pdf", revised)).toEqual({ session: edited.session, reused: true });
+    expect(ids).toEqual(["unexpected"]);
+
+    await store.deleteSession("first");
+    expect((await store.createSession("notes.pdf", pdf)).reused).toBe(false);
   });
 
   test("leaves nothing behind when an upload is rejected or interrupted", async () => {
@@ -114,7 +141,8 @@ describe("local PDF session store", () => {
   test("clears stale leftovers of interrupted uploads and nothing else", async () => {
     const root = await temporaryRoot();
     const sessions = join(root, "sessions");
-    const valid = await new SessionStore({ root, createId: () => "valid-session" }).createSession("valid.pdf", pdf);
+    const { session: valid } = await new SessionStore({ root, createId: () => "valid-session" })
+      .createSession("valid.pdf", pdf);
     const leftovers: Array<[directory: string, file: string, contents: string | Uint8Array]> = [
       [".incoming-abandoned", "document.pdf", pdf],
       ["document-without-metadata", "document.pdf", pdf],
@@ -144,7 +172,7 @@ describe("local PDF session store", () => {
   test("omits corrupt or incomplete entries from history", async () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root, createId: () => "valid-session" });
-    const valid = await store.createSession("valid.pdf", pdf);
+    const { session: valid } = await store.createSession("valid.pdf", pdf);
     const corrupt = join(root, "sessions", "corrupt-session");
     await mkdir(corrupt);
     await writeFile(join(corrupt, "metadata.json"), "not JSON\n");

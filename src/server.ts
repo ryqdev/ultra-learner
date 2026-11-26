@@ -384,8 +384,9 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
 
           try {
             // The store writes the body to disk as it arrives, so a large PDF is never held in memory here.
-            const session = await sessionStore.createSession(filename, request.body ?? new Uint8Array());
-            return Response.json({ session }, { status: 201, headers: { "Cache-Control": "no-store" } });
+            const { session, reused } = await sessionStore.createSession(filename, request.body ?? new Uint8Array());
+            // An identical stored document answers the upload; nothing new was created.
+            return Response.json({ session }, { status: reused ? 200 : 201, headers: { "Cache-Control": "no-store" } });
           } catch (error) {
             if (error instanceof SessionTooLargeError) return jsonError(error.message, 413);
             if (error instanceof TypeError) return jsonError(error.message, 400);

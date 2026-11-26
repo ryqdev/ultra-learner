@@ -409,6 +409,14 @@ describe("web server", () => {
     expect(created.filename).toBe("课程笔记.pdf");
     expect(created.fileSize).toBe(pdf.byteLength);
 
+    const repeatedResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("课程笔记.pdf") },
+      body: pdf,
+    });
+    expect(repeatedResponse.status).toBe(200);
+    expect(await repeatedResponse.json()).toEqual({ session: created });
+
     const listResponse = await fetch(new URL("/api/sessions", server.url));
     expect(listResponse.status).toBe(200);
     expect(await listResponse.json()).toEqual({ sessions: [created] });
