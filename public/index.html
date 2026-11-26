@@ -13,6 +13,18 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <script>
+      // Runs before first paint, so a dark reader does not flash light while the application loads.
+      // A stored choice wins; without one the reader follows the system setting.
+      try {
+        var theme = localStorage.getItem("ultra-learner.theme");
+        if (theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.body.classList.add("is-dark");
+        }
+      } catch (error) {
+        // Storage can be unavailable; the reader then starts light.
+      }
+    </script>
     <noscript>Ultra Learner needs JavaScript to render PDF documents.</noscript>
 
     <div class="app-shell" id="app-shell">
@@ -175,6 +187,9 @@
               </div>
 
               <div class="toolbar-edge toolbar-trailing">
+                <button class="tool-button" id="reader-theme-button" type="button" aria-label="Toggle reading theme" aria-pressed="false" title="Toggle reading theme">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                </button>
                 <button class="ai-panel-trigger" id="chat-toggle" type="button" aria-label="Open AI guide" aria-controls="chat-panel" aria-expanded="false" title="Open AI guide">
                   <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8c.5 3.9 2.5 5.9 6.4 6.4-3.9.5-5.9 2.5-6.4 6.4-.5-3.9-2.5-5.9-6.4-6.4 3.9-.5 5.9-2.5 6.4-6.4Z"/></svg>
                 </button>

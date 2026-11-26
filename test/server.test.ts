@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { createAppServer, resolveContainedPath } from "../src/server.ts";
 import { CHAT_MODELS_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
+import { THEME_STORAGE_KEY } from "../src/lib/theme.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -65,6 +66,11 @@ describe("web server", () => {
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('<form class="chat-config-form" id="chat-config-form">');
+    // The page applies the theme itself before the bundle loads; both must use one storage key.
+    expect(page).toContain(`localStorage.getItem("${THEME_STORAGE_KEY}")`);
+    expect(page.indexOf("localStorage.getItem")).toBeLessThan(page.indexOf('id="app-shell"'));
+    expect(page).toContain('id="theme-button"');
+    expect(page).toContain('id="reader-theme-button"');
     expect(page).toContain('id="chat-profile-name"');
     expect(page).toContain('id="chat-provider-preset"');
     expect(page).toContain('id="chat-api-key-toggle"');

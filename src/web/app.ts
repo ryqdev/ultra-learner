@@ -18,6 +18,7 @@ import {
   clampChatPanelWidth,
 } from "../lib/layout.ts";
 import { readerKeyboardAction } from "../lib/reader.ts";
+import { THEME_STORAGE_KEY } from "../lib/theme.ts";
 import type { SessionSummary } from "../lib/sessions.ts";
 
 const appShell = requiredElement("app-shell");
@@ -34,7 +35,11 @@ const dropZone = requiredElement("drop-zone");
 const fileInput = requiredElement<HTMLInputElement>("file-input");
 const chooseButton = requiredElement<HTMLButtonElement>("choose-button");
 const errorChooseButton = requiredElement<HTMLButtonElement>("error-choose-button");
-const themeButton = requiredElement<HTMLButtonElement>("theme-button");
+// The top bar is hidden while reading, so the reader's own strip carries a second theme control.
+const themeButtons = [
+  requiredElement<HTMLButtonElement>("theme-button"),
+  requiredElement<HTMLButtonElement>("reader-theme-button"),
+];
 const sidebarToggle = requiredElement<HTMLButtonElement>("sidebar-toggle");
 const sidebarClose = requiredElement<HTMLButtonElement>("sidebar-close");
 const readerLibrary = requiredElement<HTMLButtonElement>("reader-library");
@@ -556,10 +561,23 @@ function setChatCollapsed(collapsed: boolean): void {
 chatToggle.addEventListener("click", () => setChatCollapsed(!chatPanel.classList.contains("is-collapsed")));
 chatCollapse.addEventListener("click", () => setChatCollapsed(true));
 
-themeButton.addEventListener("click", () => {
-  const isDark = document.body.classList.toggle("is-dark");
-  themeButton.setAttribute("aria-pressed", String(isDark));
-});
+function showThemeState(isDark: boolean): void {
+  for (const button of themeButtons) button.setAttribute("aria-pressed", String(isDark));
+}
+
+// The page's inline script has already applied the stored or system theme.
+showThemeState(document.body.classList.contains("is-dark"));
+for (const button of themeButtons) {
+  button.addEventListener("click", () => {
+    const isDark = document.body.classList.toggle("is-dark");
+    showThemeState(isDark);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, isDark ? "dark" : "light");
+    } catch {
+      // Without storage the choice still holds until the page is closed.
+    }
+  });
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement
