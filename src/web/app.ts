@@ -369,9 +369,10 @@ async function openUploadedFile(file: File): Promise<void> {
   saveProgressNow();
   const token = ++documentToken;
   activeSessionId = null;
-  setTopbarTitle(file.name);
   renderHistory();
+  // Only a file the reader accepted may name the view; a rejected one just gets its toast.
   if (!await reader.openFile(file)) return;
+  setTopbarTitle(file.name);
 
   try {
     // If this file is already in history, its position must be on disk before the server reports it.
