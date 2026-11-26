@@ -479,6 +479,21 @@ describe("web server", () => {
       .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
   });
 
+  test("answers a large upload that is not a PDF with its reason", async () => {
+    server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
+    // The store stops reading after the first kilobyte; the client must still receive the reply.
+    const response = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": "notes.pdf" },
+      body: new Uint8Array(8 * 1024 * 1024),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { message: "The uploaded file does not contain a PDF header." },
+    });
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json()).toEqual({ sessions: [] });
+  });
+
   test("rejects malformed session uploads and inaccessible documents", async () => {
     server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
 
