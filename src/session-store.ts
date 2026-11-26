@@ -14,6 +14,7 @@ import {
   parseSessionProgress,
   sessionNameValidationError,
   toSessionSummary,
+  type ProgressOrder,
   type SessionMetadata,
   type SessionSummary,
 } from "./lib/sessions.ts";
@@ -84,6 +85,12 @@ export class SessionStore {
   private readonly createId: () => string;
   private readonly maximumFileSize: number;
   private cleanup: Promise<void> | undefined;
+  // Uploads being moved into place, one at a time.
+  private commits: Promise<unknown> = Promise.resolve();
+  // Position writes still running or waiting, per session.
+  private readonly progressWrites = new Map<string, Promise<void>>();
+  // The newest numbered position update applied to each session since this store started.
+  private readonly appliedProgress = new Map<string, ProgressOrder>();
 
   public constructor(options: SessionStoreOptions = {}) {
     this.root = options.root ?? join(homedir(), ".ultra-learner");
@@ -129,38 +136,46 @@ export class SessionStore {
     await mkdir(incoming, { mode: 0o700 });
     try {
       const fileSize = await this.writeDocument(join(incoming, PDF_FILENAME), source);
-      const existing = await this.findIdenticalSession(filename, fileSize, join(incoming, PDF_FILENAME));
-      if (existing) {
-        await rm(incoming, { recursive: true, force: true });
-        return { session: existing, reused: true };
-      }
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const id = this.createId();
-        if (!isSessionId(id)) throw new Error("The generated session ID is invalid.");
-        const directory = this.sessionDirectory(id);
-        if (await pathExists(directory)) continue;
-
-        const metadata: SessionMetadata = {
-          version: SESSION_STORAGE_VERSION,
-          id,
-          filename,
-          fileSize,
-          createdAt: this.clock().toISOString(),
-        };
-        await writeFile(join(incoming, METADATA_FILENAME), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
-        try {
-          await rename(incoming, directory);
-          return { session: toSessionSummary(metadata), reused: false };
-        } catch (error) {
-          // Another writer claimed this ID between the check and the rename.
-          if (!await pathExists(directory)) throw error;
-        }
-      }
-      throw new Error("Unable to allocate a unique session ID.");
+      // Uploads are received side by side, but checking for a stored duplicate and moving the
+      // upload into place is one step at a time, or two identical uploads would both be kept.
+      const commit = this.commits.then(() => this.commitUpload(incoming, filename, fileSize));
+      this.commits = commit.catch(() => undefined);
+      return await commit;
     } catch (error) {
       await rm(incoming, { recursive: true, force: true });
       throw error;
     }
+  }
+
+  private async commitUpload(incoming: string, filename: string, fileSize: number): Promise<SavedSession> {
+    const existing = await this.findIdenticalSession(filename, fileSize, join(incoming, PDF_FILENAME));
+    if (existing) {
+      await rm(incoming, { recursive: true, force: true });
+      return { session: existing, reused: true };
+    }
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const id = this.createId();
+      if (!isSessionId(id)) throw new Error("The generated session ID is invalid.");
+      const directory = this.sessionDirectory(id);
+      if (await pathExists(directory)) continue;
+
+      const metadata: SessionMetadata = {
+        version: SESSION_STORAGE_VERSION,
+        id,
+        filename,
+        fileSize,
+        createdAt: this.clock().toISOString(),
+      };
+      await writeFile(join(incoming, METADATA_FILENAME), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
+      try {
+        await rename(incoming, directory);
+        return { session: toSessionSummary(metadata), reused: false };
+      } catch (error) {
+        // Another writer claimed this ID between the check and the rename.
+        if (!await pathExists(directory)) throw error;
+      }
+    }
+    throw new Error("Unable to allocate a unique session ID.");
   }
 
   public async getSessionDocument(id: string): Promise<SessionDocument> {
@@ -180,9 +195,32 @@ export class SessionStore {
     }
   }
 
-  /** Remember the page a learner has reached, replacing any earlier position. */
-  public async saveProgress(id: string, page: number): Promise<void> {
+  /**
+   * Remember the page a learner has reached, replacing any earlier position.
+   * Writes for one session run one at a time in the order they were requested,
+   * and a numbered update older than one already applied from the same writer
+   * is dropped, because a browser's two requests need not arrive in the order
+   * they were sent.
+   */
+  public async saveProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
     if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
+    if (!isSessionId(id)) throw new SessionNotFoundError();
+
+    const write = (this.progressWrites.get(id) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.writeProgress(id, page, order));
+    this.progressWrites.set(id, write);
+    try {
+      await write;
+    } finally {
+      if (this.progressWrites.get(id) === write) this.progressWrites.delete(id);
+    }
+  }
+
+  private async writeProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
+    const applied = this.appliedProgress.get(id);
+    if (order && applied?.writer === order.writer && order.sequence < applied.sequence) return;
+
     await this.getSessionDocument(id);
     const directory = this.sessionDirectory(id);
     // Write beside the target and rename, so a reader never sees a half-written position.
@@ -195,11 +233,13 @@ export class SessionStore {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new SessionNotFoundError();
       throw error;
     }
+    if (order) this.appliedProgress.set(id, order);
   }
 
   public async deleteSession(id: string): Promise<void> {
     if (!isSessionId(id)) throw new SessionNotFoundError();
     await this.getSessionDocument(id);
+    this.appliedProgress.delete(id);
     try {
       await rm(this.sessionDirectory(id), { recursive: true });
     } catch (error) {

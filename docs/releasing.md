@@ -7,8 +7,16 @@ a package. Review and merge the release PR when its accumulated changes are read
 
 ## Version rules
 
-Use Conventional Commits in the commits that reach `main`. With squash merging,
-keep the convention in the final squash commit; using it in PR titles helps.
+Use Conventional Commits in the commits that reach `main`. How a PR is merged
+decides where the convention belongs:
+
+- **Squash merge:** the PR title becomes the single commit, so write the title as
+  a Conventional Commit.
+- **Merge commit:** the PR's own commits already carry the convention. Give the
+  PR a plain descriptive title. GitHub copies the title into the merge commit's
+  message, and Release Please reads a conventional line there as one more change,
+  so a title such as `fix: …` adds an umbrella entry to the changelog beside the
+  commits it summarizes. The 0.1.0 and 0.2.0 notes each contain one.
 
 | Commit | Next version after 0.1.0 |
 | --- | --- |

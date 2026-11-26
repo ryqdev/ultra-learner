@@ -452,6 +452,15 @@ describe("web server", () => {
     expect(await (await fetch(new URL("/api/sessions", server.url))).json())
       .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
 
+    // A numbered update that arrives after a newer one from the same page is accepted but not applied.
+    expect((await put(JSON.stringify({ page: 12, writer: "tab-1", sequence: 2 }))).status).toBe(204);
+    expect((await put(JSON.stringify({ page: 11, writer: "tab-1", sequence: 1 }))).status).toBe(204);
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json())
+      .toEqual({ sessions: [{ ...created, lastPage: 12 }] });
+    expect((await put(JSON.stringify({ page: 9, writer: "tab-2", sequence: 1 }))).status).toBe(204);
+    const unordered = await put(JSON.stringify({ page: 9, writer: "tab-2" }));
+    expect(unordered.status).toBe(400);
+
     const invalid = await put(JSON.stringify({ page: 0 }));
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({
@@ -468,6 +477,21 @@ describe("web server", () => {
     expect(wrongMethod.headers.get("allow")).toBe("PUT");
     expect(await (await fetch(new URL("/api/sessions", server.url))).json())
       .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
+  });
+
+  test("answers a large upload that is not a PDF with its reason", async () => {
+    server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
+    // The store stops reading after the first kilobyte; the client must still receive the reply.
+    const response = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": "notes.pdf" },
+      body: new Uint8Array(8 * 1024 * 1024),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { message: "The uploaded file does not contain a PDF header." },
+    });
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json()).toEqual({ sessions: [] });
   });
 
   test("rejects malformed session uploads and inaccessible documents", async () => {

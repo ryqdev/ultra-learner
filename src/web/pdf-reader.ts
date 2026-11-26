@@ -121,6 +121,9 @@ export class PdfReaderController {
   private mainPageRendering = false;
   // The page whose canvas is on screen, so a redraw can be told apart from a page turn.
   private renderedPage: number | null = null;
+  // Where the next newly shown page starts. Held here rather than passed to one render,
+  // because a zoom step or layer toggle can replace that render before it finishes.
+  private arrivalPlacement: PagePlacement = "start";
   private pendingTextLayer: TextLayerBuilder | null = null;
   private pendingAnnotationLayer: AnnotationLayer | null = null;
   private thumbnailRenderTask: RenderTask | null = null;
@@ -240,8 +243,9 @@ export class PdfReaderController {
       return;
     }
     this.state.page = nextPage;
+    this.arrivalPlacement = placement;
     this.clearSelection();
-    await this.renderCurrentPage(false, placement);
+    await this.renderCurrentPage();
   }
 
   public async goToDestination(page: number, explicitDestination: readonly unknown[]): Promise<void> {
@@ -435,6 +439,7 @@ export class PdfReaderController {
     this.thumbnailRenderTask = null;
     this.mainPageRendering = false;
     this.renderedPage = null;
+    this.arrivalPlacement = "start";
     this.state.textLayer = null;
     this.state.annotationLayer = null;
     this.state.annotationCanvasMap = null;
@@ -554,7 +559,7 @@ export class PdfReaderController {
     });
   }
 
-  private async renderCurrentPage(recalculateFit = false, placement: PagePlacement = "start"): Promise<void> {
+  private async renderCurrentPage(recalculateFit = false): Promise<void> {
     this.cancelVimScroll();
     const pdf = this.state.document;
     if (!pdf) return;
@@ -709,8 +714,9 @@ export class PdfReaderController {
           left: rescaledScrollOffset(previousView.left, previousView.width, width, previousView.marginLeft),
         });
       } else {
-        stage.scrollTo({ top: placement === "end" ? stage.scrollHeight : 0, left: 0 });
+        stage.scrollTo({ top: this.arrivalPlacement === "end" ? stage.scrollHeight : 0, left: 0 });
       }
+      this.arrivalPlacement = "start";
       this.renderedPage = this.state.page;
       this.updateControls();
       this.callbacks.onPageShown?.(this.state.page);

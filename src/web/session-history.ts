@@ -1,5 +1,5 @@
 import { formatFileSize } from "../lib/files.ts";
-import { isSessionSummary, type SessionSummary } from "../lib/sessions.ts";
+import { parseSessionSummary, type SessionProgress, type SessionSummary } from "../lib/sessions.ts";
 
 interface SessionListResponse {
   sessions?: unknown;
@@ -33,7 +33,7 @@ export async function listSessions(fetcher: SessionFetch = fetch): Promise<Sessi
   if (!response.ok) throw responseError(data, "Unable to load your PDF history.");
   const { sessions } = data as SessionListResponse;
   if (!Array.isArray(sessions)) throw new Error("The PDF history response is invalid.");
-  return sessions.filter(isSessionSummary);
+  return sessions.map(parseSessionSummary).filter((session): session is SessionSummary => session !== null);
 }
 
 export async function saveSession(
@@ -51,8 +51,8 @@ export async function saveSession(
   });
   const result = await responseJson(response);
   if (!response.ok) throw responseError(result, "Unable to save this PDF to your history.");
-  const { session } = result as SessionCreateResponse;
-  if (!isSessionSummary(session)) throw new Error("The saved PDF session is invalid.");
+  const session = parseSessionSummary((result as SessionCreateResponse).session);
+  if (!session) throw new Error("The saved PDF session is invalid.");
   return session;
 }
 
@@ -81,16 +81,19 @@ export async function deleteSession(
     : "Unable to delete this PDF session.");
 }
 
-/** Record the page a learner has reached. The request may outlive the page that sent it. */
+/**
+ * Record the page a learner has reached. The request may outlive the page that
+ * sent it, and `order` lets the server discard one that arrives after a newer one.
+ */
 export async function saveSessionProgress(
   sessionId: string,
-  page: number,
+  { page, order }: SessionProgress,
   fetcher: SessionFetch = fetch,
 ): Promise<void> {
   const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}/progress`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ page }),
+    body: JSON.stringify({ page, ...order }),
     keepalive: true,
   });
   if (response.ok) return;

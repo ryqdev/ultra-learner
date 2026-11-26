@@ -28,4 +28,5 @@ This supersedes the earlier consequence that repeated uploads intentionally crea
 - A session is no longer a record of each time a file was opened. Nothing in the product relied on that.
 - Deleting the session removes the only stored copy, as before; opening the file again afterwards stores it afresh.
 - An upload that turns out to be a duplicate is still written to the incoming directory and hashed before it is discarded.
+- Uploads are received in parallel, but the duplicate check and the move into place run one upload at a time within a reader process, so identical uploads that arrive together are still stored once. Two reader processes sharing one storage root do not coordinate and can each keep a copy.
 - Disk use still grows with the number of distinct documents until the learner deletes them; automatic retention remains out of scope.

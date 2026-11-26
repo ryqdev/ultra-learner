@@ -189,6 +189,14 @@ describe("saved chat provider profiles", () => {
     });
     expect(switched.name).toBe("other-model");
 
+    // A model id longer than a name may be still saves, and still counts as unnamed afterwards.
+    const longModel = `accounts/example/models/${"very-long-model-name-".repeat(5)}v1`;
+    expect(longModel.length).toBeGreaterThan(80);
+    const long = createChatProfile({ ...config, model: longModel, name: resolveProfileName("", longModel) }, () => "long");
+    expect(long.name).toBe(longModel.slice(0, 80));
+    expect(long.model).toBe(longModel);
+    expect(editableProfileName(long)).toBe("");
+
     const named = createChatProfile({ name: "Work gateway", ...config }, () => "profile-two");
     expect(editableProfileName(named)).toBe("Work gateway");
     expect(resolveProfileName(editableProfileName(named), "other-model")).toBe("Work gateway");

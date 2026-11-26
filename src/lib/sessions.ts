@@ -12,8 +12,18 @@ export interface SessionSummary {
   lastPage?: number;
 }
 
+/**
+ * Numbers one writer's position updates. Two requests from the same page can
+ * reach the server in either order; this lets the older one be recognized.
+ */
+export interface ProgressOrder {
+  writer: string;
+  sequence: number;
+}
+
 export interface SessionProgress {
   page: number;
+  order?: ProgressOrder;
 }
 
 export interface SessionMetadata extends SessionSummary {
@@ -49,9 +59,25 @@ export function isReadingPage(value: unknown): value is number {
 
 /** Parse the untrusted body of a reading-position update. */
 export function parseSessionProgress(value: unknown): SessionProgress {
-  const page = value && typeof value === "object" ? (value as Partial<SessionProgress>).page : undefined;
-  if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
-  return { page };
+  const candidate = value && typeof value === "object"
+    ? value as { page?: unknown; writer?: unknown; sequence?: unknown }
+    : {};
+  if (!isReadingPage(candidate.page)) {
+    throw new TypeError("The reading position must be a page number of 1 or more.");
+  }
+  if (candidate.writer === undefined && candidate.sequence === undefined) return { page: candidate.page };
+
+  const { writer, sequence } = candidate;
+  if (
+    typeof writer !== "string"
+    || !/^[a-zA-Z0-9-]{1,64}$/.test(writer)
+    || typeof sequence !== "number"
+    || !Number.isSafeInteger(sequence)
+    || sequence < 0
+  ) {
+    throw new TypeError("The reading position's writer and sequence are invalid.");
+  }
+  return { page: candidate.page, order: { writer, sequence } };
 }
 
 export function isSessionMetadata(value: unknown): value is SessionMetadata {
@@ -73,11 +99,20 @@ export function isSessionSummary(value: unknown): value is SessionSummary {
     && candidate.fileSize <= MAXIMUM_PDF_FILE_SIZE
     && sessionFilenameValidationError(candidate.filename, candidate.fileSize) === null
     && typeof candidate.createdAt === "string"
-    && Number.isFinite(Date.parse(candidate.createdAt))
-    && (candidate.lastPage === undefined || isReadingPage(candidate.lastPage));
+    && Number.isFinite(Date.parse(candidate.createdAt));
 }
 
-export function toSessionSummary(metadata: SessionMetadata): SessionSummary {
+/**
+ * Read an untrusted summary. The stored position is optional detail, so an
+ * unusable one is dropped instead of discarding the session it belongs to.
+ */
+export function parseSessionSummary(value: unknown): SessionSummary | null {
+  if (!isSessionSummary(value)) return null;
+  const { lastPage } = value as { lastPage?: unknown };
+  return { ...toSessionSummary(value), ...(isReadingPage(lastPage) ? { lastPage } : {}) };
+}
+
+export function toSessionSummary(metadata: SessionSummary): SessionSummary {
   const { id, filename, fileSize, createdAt } = metadata;
   return { id, filename, fileSize, createdAt };
 }

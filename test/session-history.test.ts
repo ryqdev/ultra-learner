@@ -67,7 +67,8 @@ describe("browser session transport", () => {
 
   test("sends the reading position and keeps a session's last page from the list", async () => {
     let request: Request | undefined;
-    await saveSessionProgress(session.id, 14, async (input, init) => {
+    const order = { writer: "tab-1", sequence: 3 };
+    await saveSessionProgress(session.id, { page: 14, order }, async (input, init) => {
       const target = typeof input === "string" && input.startsWith("/") ? `http://local.test${input}` : input;
       request = new Request(target, init);
       expect(init?.keepalive).toBe(true);
@@ -75,16 +76,19 @@ describe("browser session transport", () => {
     });
     expect(request?.method).toBe("PUT");
     expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}/progress`);
-    expect(await request!.json()).toEqual({ page: 14 });
+    expect(await request!.json()).toEqual({ page: 14, writer: "tab-1", sequence: 3 });
 
-    await expect(saveSessionProgress(session.id, 14, async () => new Response("Not found", { status: 404 })))
+    await expect(saveSessionProgress(session.id, { page: 14 }, async () => new Response("Not found", { status: 404 })))
       .rejects.toThrow("no longer available");
-    await expect(saveSessionProgress(session.id, 0, async () =>
+    await expect(saveSessionProgress(session.id, { page: 0 }, async () =>
       Response.json({ error: { message: "The reading position must be a page number of 1 or more." } }, { status: 400 })))
       .rejects.toThrow("page number of 1 or more");
 
-    const listed = async () => Response.json({ sessions: [{ ...session, lastPage: 14 }, { ...session, lastPage: 0 }] });
-    expect(await listSessions(listed as SessionFetch)).toEqual([{ ...session, lastPage: 14 }]);
+    const listed = async () => Response.json({
+      sessions: [{ ...session, lastPage: 14 }, { ...session, id: "session-02", lastPage: 0 }],
+    });
+    expect(await listSessions(listed as SessionFetch))
+      .toEqual([{ ...session, lastPage: 14 }, { ...session, id: "session-02" }]);
   });
 
   test("formats local session metadata for the history list", () => {

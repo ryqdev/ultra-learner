@@ -138,6 +138,43 @@ describe("local PDF session store", () => {
     expect(await store.createSession("notes.pdf", pdf)).toEqual({ session: { ...session, lastPage: 3 }, reused: true });
   });
 
+  test("applies position updates in the order a reader made them", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "reading" });
+    await store.createSession("notes.pdf", pdf);
+    const lastPage = async (): Promise<number | undefined> => (await store.listSessions())[0]?.lastPage;
+
+    // Requests issued together are applied one after another, never interleaved.
+    await Promise.all(Array.from({ length: 12 }, (_, index) =>
+      store.saveProgress("reading", index + 1, { writer: "tab-a", sequence: index + 1 })));
+    expect(await lastPage()).toBe(12);
+
+    // An update that left the page earlier but arrived later must not win.
+    await store.saveProgress("reading", 2, { writer: "tab-a", sequence: 5 });
+    expect(await lastPage()).toBe(12);
+    await store.saveProgress("reading", 20, { writer: "tab-a", sequence: 13 });
+    expect(await lastPage()).toBe(20);
+
+    // Another tab numbers its own updates, and an unnumbered update always applies.
+    await store.saveProgress("reading", 7, { writer: "tab-b", sequence: 1 });
+    expect(await lastPage()).toBe(7);
+    await store.saveProgress("reading", 3);
+    expect(await lastPage()).toBe(3);
+  });
+
+  test("keeps one session when identical uploads arrive together", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root });
+
+    const results = await Promise.all(Array.from({ length: 6 }, () =>
+      store.createSession("notes.pdf", streamOf(pdf.subarray(0, 12), pdf.subarray(12)))));
+
+    expect(results.filter((result) => !result.reused)).toHaveLength(1);
+    expect(new Set(results.map((result) => result.session.id)).size).toBe(1);
+    expect(await store.listSessions()).toHaveLength(1);
+    expect(await readdir(join(root, "sessions"))).toHaveLength(1);
+  });
+
   test("rejects impossible positions and opens at the first page when a position is unreadable", async () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root, createId: () => "reading" });
