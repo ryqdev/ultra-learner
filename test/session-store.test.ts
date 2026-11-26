@@ -269,9 +269,12 @@ describe("local PDF session store", () => {
       await mkdir(join(sessions, directory));
       await writeFile(join(sessions, directory, file), contents);
     }
+    // A position write that was cut off between writing its draft and renaming it.
+    await writeFile(join(sessions, "valid-session", "progress.json.cut-off.tmp"), '{"version":1,"page":4}\n');
 
-    // A reader started moments later has to assume those uploads are still running.
+    // A reader started moments later has to assume those writes are still running.
     expect(await new SessionStore({ root }).listSessions()).toEqual([valid]);
+    expect(await readdir(join(sessions, "valid-session"))).toContain("progress.json.cut-off.tmp");
     expect((await readdir(sessions)).sort()).toEqual([
       ".incoming-abandoned",
       "corrupt-session",
@@ -283,6 +286,7 @@ describe("local PDF session store", () => {
     const startedLater = new SessionStore({ root, clock: () => new Date(Date.now() + 2 * 60 * 60 * 1000) });
     expect(await startedLater.listSessions()).toEqual([valid]);
     expect((await readdir(sessions)).sort()).toEqual(["corrupt-session", "unrelated-folder", "valid-session"]);
+    expect((await readdir(join(sessions, "valid-session"))).sort()).toEqual(["document.pdf", "metadata.json"]);
   });
 
   test("omits corrupt or incomplete entries from history", async () => {

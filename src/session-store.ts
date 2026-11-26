@@ -365,9 +365,10 @@ export class SessionStore {
   }
 
   /**
-   * Remove what an interrupted upload left behind: stale incoming directories
-   * and session directories that hold at most a document and no metadata, the
-   * state earlier versions could be killed in. Anything else is left untouched.
+   * Remove what an interrupted write left behind: stale incoming directories,
+   * session directories that hold at most a document and no metadata (the
+   * state earlier versions could be killed in), and position drafts that were
+   * never renamed into place. Anything else is left untouched.
    */
   private async removeIncompleteEntries(): Promise<void> {
     // Read the clock only when something needs judging, so an ordinary start does not consume it.
@@ -380,7 +381,16 @@ export class SessionStore {
         if (!entry.name.startsWith(INCOMING_PREFIX)) {
           if (!isSessionId(entry.name)) return;
           const contents = await readdir(directory);
-          if (contents.some((name) => name !== PDF_FILENAME)) return;
+          if (contents.some((name) => name !== PDF_FILENAME)) {
+            // A kept session: only a position draft whose write never finished is removed from it.
+            for (const name of contents) {
+              if (!name.startsWith(`${PROGRESS_FILENAME}.`) || !name.endsWith(".tmp")) continue;
+              now ??= this.clock().getTime();
+              const draft = join(directory, name);
+              if (now - (await lstat(draft)).mtimeMs >= INCOMPLETE_ENTRY_GRACE_MS) await rm(draft, { force: true });
+            }
+            return;
+          }
         }
         now ??= this.clock().getTime();
         if (now - (await lstat(directory)).mtimeMs < INCOMPLETE_ENTRY_GRACE_MS) return;
