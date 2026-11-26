@@ -409,6 +409,15 @@ describe("web server", () => {
     expect(created.filename).toBe("课程笔记.pdf");
     expect(created.fileSize).toBe(pdf.byteLength);
 
+    // The same document under a name with stray whitespace is still that document.
+    const paddedResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("  课程笔记.pdf\u00a0") },
+      body: pdf,
+    });
+    expect(paddedResponse.status).toBe(200);
+    expect(await paddedResponse.json()).toEqual({ session: created });
+
     const repeatedResponse = await fetch(new URL("/api/sessions", server.url), {
       method: "POST",
       headers: { "X-Ultra-Learner-Filename": encodeURIComponent("课程笔记.pdf") },
@@ -504,6 +513,13 @@ describe("web server", () => {
     });
     expect(emptyResponse.status).toBe(400);
     expect(await emptyResponse.json()).toEqual({ error: { message: "That PDF is empty." } });
+
+    const blankNameResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("   ") },
+      body: "%PDF-1.7\n",
+    });
+    expect(blankNameResponse.status).toBe(400);
 
     const unnamedResponse = await fetch(new URL("/api/sessions", server.url), { method: "POST", body: "%PDF-1.7\n" });
     expect(unnamedResponse.status).toBe(400);
