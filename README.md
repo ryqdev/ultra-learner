@@ -43,7 +43,7 @@ start builds a minified bundle once and keeps it in memory.
 ## Current experience
 
 - Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
-- A workspace sidebar with a local reading history: each uploaded PDF becomes a session in `~/.ultra-learner/sessions` and can be reopened or explicitly deleted from the persistent Recents list. Opening a PDF that is already stored under the same name reuses its session instead of saving another copy.
+- A workspace sidebar with a local reading history: each uploaded PDF becomes a session in `~/.ultra-learner/sessions` and can be reopened or explicitly deleted from the persistent Recents list. Opening a PDF that is already stored under the same name reuses its session instead of saving another copy, and a reopened session returns to the page where it was left.
 - Browser-owned PDF parsing and rendering; the Bun server only receives uploaded bytes to persist them on the same device, streaming them to disk and making a session visible only once it is complete.
 - On-demand page thumbnails, previous/next controls, direct page entry with a visible page count, and Vim-friendly keyboard navigation (`j`/`k` scroll and continue onto the adjoining page at either edge, `d`/`u` page).
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.

@@ -435,6 +435,41 @@ describe("web server", () => {
     expect((await fetch(new URL(`/api/sessions/${created.id}`, server.url), { method: "DELETE" })).status).toBe(404);
   });
 
+  test("stores and returns the last page of a session", async () => {
+    server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
+    const pdf = new TextEncoder().encode("%PDF-1.7\nreading position fixture\n%%EOF\n");
+    const created = (await (await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": "notes.pdf" },
+      body: pdf,
+    })).json()).session as { id: string };
+    const progressUrl = new URL(`/api/sessions/${created.id}/progress`, server.url);
+    const put = (body: string, url = progressUrl): Promise<Response> =>
+      fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body });
+
+    const saved = await put(JSON.stringify({ page: 9 }));
+    expect(saved.status).toBe(204);
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json())
+      .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
+
+    const invalid = await put(JSON.stringify({ page: 0 }));
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({
+      error: { message: "The reading position must be a page number of 1 or more." },
+    });
+    expect((await put("not json")).status).toBe(400);
+    expect((await put(JSON.stringify({ page: 2 }), new URL("/api/sessions/missing/progress", server.url))).status)
+      .toBe(404);
+    expect((await put(JSON.stringify({ page: 2 }), new URL("/api/sessions/%2E%2E%2Fsecret/progress", server.url))).status)
+      .toBe(404);
+
+    const wrongMethod = await fetch(progressUrl, { method: "POST", body: "{}" });
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get("allow")).toBe("PUT");
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json())
+      .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
+  });
+
   test("rejects malformed session uploads and inaccessible documents", async () => {
     server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
 

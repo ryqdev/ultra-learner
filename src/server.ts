@@ -13,6 +13,7 @@ import {
   type ChatFetcher,
 } from "./lib/chat.ts";
 import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
+import { parseSessionProgress } from "./lib/sessions.ts";
 import {
   SessionNotFoundError,
   SessionStore,
@@ -416,6 +417,23 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
             return new Response("Not found", { status: 404 });
           }
           throw error;
+        }
+      }
+
+      const sessionProgressMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/progress$/);
+      if (sessionProgressMatch) {
+        if (request.method !== "PUT") return methodNotAllowed("PUT");
+        const progress = await readJsonPayload(request, "reading position", parseSessionProgress);
+        if (progress instanceof Response) return progress;
+        try {
+          await sessionStore.saveProgress(decodeURIComponent(sessionProgressMatch[1] ?? ""), progress.page);
+          return new Response(null, { status: 204 });
+        } catch (error) {
+          if (error instanceof SessionNotFoundError || error instanceof URIError) {
+            return new Response("Not found", { status: 404 });
+          }
+          console.error(error);
+          return jsonError("Unable to save the reading position.", 500);
         }
       }
 

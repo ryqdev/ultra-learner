@@ -8,8 +8,10 @@ import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
 import {
   SESSION_STORAGE_VERSION,
   hasPdfHeader,
+  isReadingPage,
   isSessionId,
   isSessionMetadata,
+  parseSessionProgress,
   sessionNameValidationError,
   toSessionSummary,
   type SessionMetadata,
@@ -19,6 +21,9 @@ import {
 const SESSIONS_DIRECTORY = "sessions";
 const METADATA_FILENAME = "metadata.json";
 const PDF_FILENAME = "document.pdf";
+// Kept beside the metadata rather than in it, so the record of the upload itself never changes.
+const PROGRESS_FILENAME = "progress.json";
+const PROGRESS_VERSION = 1;
 // The leading dot keeps an upload in progress from ever reading as a session ID.
 const INCOMING_PREFIX = ".incoming-";
 const PDF_HEADER_WINDOW = 1_024;
@@ -175,6 +180,23 @@ export class SessionStore {
     }
   }
 
+  /** Remember the page a learner has reached, replacing any earlier position. */
+  public async saveProgress(id: string, page: number): Promise<void> {
+    if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
+    await this.getSessionDocument(id);
+    const directory = this.sessionDirectory(id);
+    // Write beside the target and rename, so a reader never sees a half-written position.
+    const draft = join(directory, `${PROGRESS_FILENAME}.${crypto.randomUUID()}.tmp`);
+    try {
+      await writeFile(draft, `${JSON.stringify({ version: PROGRESS_VERSION, page })}\n`, { flag: "wx", mode: 0o600 });
+      await rename(draft, join(directory, PROGRESS_FILENAME));
+    } catch (error) {
+      await rm(draft, { force: true });
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new SessionNotFoundError();
+      throw error;
+    }
+  }
+
   public async deleteSession(id: string): Promise<void> {
     if (!isSessionId(id)) throw new SessionNotFoundError();
     await this.getSessionDocument(id);
@@ -320,6 +342,19 @@ export class SessionStore {
 
     const metadata: unknown = JSON.parse(await readFile(metadataPath, "utf8"));
     if (!isSessionMetadata(metadata) || metadata.id !== id) throw new SessionNotFoundError();
-    return toSessionSummary(metadata);
+    const lastPage = await this.readProgress(directory);
+    return { ...toSessionSummary(metadata), ...(lastPage ? { lastPage } : {}) };
+  }
+
+  /** A missing or unreadable position only means the document opens at its first page. */
+  private async readProgress(directory: string): Promise<number | undefined> {
+    try {
+      const progress: unknown = JSON.parse(await readFile(join(directory, PROGRESS_FILENAME), "utf8"));
+      if (!progress || typeof progress !== "object") return undefined;
+      if ((progress as { version?: unknown }).version !== PROGRESS_VERSION) return undefined;
+      return parseSessionProgress(progress).page;
+    } catch {
+      return undefined;
+    }
   }
 }

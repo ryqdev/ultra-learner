@@ -29,7 +29,7 @@ The browser continues to own PDF parsing and rendering. It validates the file at
 - Uploaded PDF bytes now cross the browser/server boundary, but remain on the same device under the local application's control; privacy copy and architecture documentation must describe that boundary accurately.
 - Repeated uploads intentionally create separate sessions, even when filenames or bytes match. The later [reuse of identical uploads](2026-11-26-reuse-identical-uploads.md) decision supersedes this for an upload whose name and bytes both match a stored session.
 - Disk use grows until the learner explicitly deletes sessions; automatic retention and bulk deletion remain out of scope.
-- Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral.
+- Reading position, zoom, chat messages, selections, provider credentials, and the sample document remain ephemeral. The later [session reading position](2026-11-26-session-reading-position.md) decision supersedes this for the last page of each session.
 - The workspace sidebar is a presentation and navigation layer over the same session API; collapsing it or opening it as a mobile drawer does not alter stored sessions.
 - Deletion is irreversible at the application layer, so it is kept separate from the open action and requires a keyboard-accessible modal confirmation before the request is sent. The application handles the modal actions explicitly so deletion is not coupled to form submission values propagating through `<dialog>`.
 - The version field gives future migrations an explicit compatibility boundary; unsupported, malformed, symlinked, incomplete, or size-mismatched entries are hidden from history.

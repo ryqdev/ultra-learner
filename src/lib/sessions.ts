@@ -8,6 +8,12 @@ export interface SessionSummary {
   filename: string;
   fileSize: number;
   createdAt: string;
+  /** The page the learner last had open; absent until one has been recorded. */
+  lastPage?: number;
+}
+
+export interface SessionProgress {
+  page: number;
 }
 
 export interface SessionMetadata extends SessionSummary {
@@ -36,6 +42,18 @@ export function hasPdfHeader(data: Uint8Array): boolean {
   return header.includes("%PDF-");
 }
 
+/** A one-based page number. Whether the document has that many pages is the reader's concern. */
+export function isReadingPage(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+}
+
+/** Parse the untrusted body of a reading-position update. */
+export function parseSessionProgress(value: unknown): SessionProgress {
+  const page = value && typeof value === "object" ? (value as Partial<SessionProgress>).page : undefined;
+  if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
+  return { page };
+}
+
 export function isSessionMetadata(value: unknown): value is SessionMetadata {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<SessionMetadata>;
@@ -55,7 +73,8 @@ export function isSessionSummary(value: unknown): value is SessionSummary {
     && candidate.fileSize <= MAXIMUM_PDF_FILE_SIZE
     && sessionFilenameValidationError(candidate.filename, candidate.fileSize) === null
     && typeof candidate.createdAt === "string"
-    && Number.isFinite(Date.parse(candidate.createdAt));
+    && Number.isFinite(Date.parse(candidate.createdAt))
+    && (candidate.lastPage === undefined || isReadingPage(candidate.lastPage));
 }
 
 export function toSessionSummary(metadata: SessionMetadata): SessionSummary {

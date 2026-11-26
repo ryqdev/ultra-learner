@@ -6,6 +6,7 @@ import {
   listSessions,
   loadSessionPdf,
   saveSession,
+  saveSessionProgress,
   sessionMeta,
 } from "../src/web/session-history.ts";
 import type { SessionFetch } from "../src/web/session-history.ts";
@@ -62,6 +63,28 @@ describe("browser session transport", () => {
     expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}`);
     await expect(deleteSession(session, async () => new Response("Not found", { status: 404 })))
       .rejects.toThrow("no longer available");
+  });
+
+  test("sends the reading position and keeps a session's last page from the list", async () => {
+    let request: Request | undefined;
+    await saveSessionProgress(session.id, 14, async (input, init) => {
+      const target = typeof input === "string" && input.startsWith("/") ? `http://local.test${input}` : input;
+      request = new Request(target, init);
+      expect(init?.keepalive).toBe(true);
+      return new Response(null, { status: 204 });
+    });
+    expect(request?.method).toBe("PUT");
+    expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}/progress`);
+    expect(await request!.json()).toEqual({ page: 14 });
+
+    await expect(saveSessionProgress(session.id, 14, async () => new Response("Not found", { status: 404 })))
+      .rejects.toThrow("no longer available");
+    await expect(saveSessionProgress(session.id, 0, async () =>
+      Response.json({ error: { message: "The reading position must be a page number of 1 or more." } }, { status: 400 })))
+      .rejects.toThrow("page number of 1 or more");
+
+    const listed = async () => Response.json({ sessions: [{ ...session, lastPage: 14 }, { ...session, lastPage: 0 }] });
+    expect(await listSessions(listed as SessionFetch)).toEqual([{ ...session, lastPage: 14 }]);
   });
 
   test("formats local session metadata for the history list", () => {

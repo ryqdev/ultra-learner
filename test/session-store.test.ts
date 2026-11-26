@@ -118,6 +118,46 @@ describe("local PDF session store", () => {
     expect((await store.createSession("notes.pdf", pdf)).reused).toBe(false);
   });
 
+  test("remembers the last page of a session without touching its metadata", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "reading" });
+    const { session } = await store.createSession("notes.pdf", pdf);
+    const metadataPath = join(root, "sessions", "reading", "metadata.json");
+    const metadata = await readFile(metadataPath, "utf8");
+    expect(session.lastPage).toBeUndefined();
+
+    await store.saveProgress("reading", 12);
+    expect(await store.listSessions()).toEqual([{ ...session, lastPage: 12 }]);
+    await store.saveProgress("reading", 3);
+    expect((await store.getSessionDocument("reading")).summary).toEqual({ ...session, lastPage: 3 });
+
+    expect(await readFile(metadataPath, "utf8")).toBe(metadata);
+    expect((await readdir(join(root, "sessions", "reading"))).sort())
+      .toEqual(["document.pdf", "metadata.json", "progress.json"]);
+    // Opening the same file again finds the session together with its position.
+    expect(await store.createSession("notes.pdf", pdf)).toEqual({ session: { ...session, lastPage: 3 }, reused: true });
+  });
+
+  test("rejects impossible positions and opens at the first page when a position is unreadable", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "reading" });
+    const { session } = await store.createSession("notes.pdf", pdf);
+
+    for (const page of [0, -1, 1.5, Number.NaN]) {
+      await expect(store.saveProgress("reading", page)).rejects.toThrow("reading position");
+    }
+    await expect(store.saveProgress("missing", 2)).rejects.toBeInstanceOf(SessionNotFoundError);
+    await expect(store.saveProgress("../reading", 2)).rejects.toBeInstanceOf(SessionNotFoundError);
+    expect(await store.listSessions()).toEqual([session]);
+
+    for (const corrupt of ["not JSON", '{"version":1,"page":0}', '{"version":2,"page":5}', "[]"]) {
+      await writeFile(join(root, "sessions", "reading", "progress.json"), corrupt);
+      expect(await store.listSessions()).toEqual([session]);
+    }
+    await store.deleteSession("reading");
+    await expect(store.saveProgress("reading", 2)).rejects.toBeInstanceOf(SessionNotFoundError);
+  });
+
   test("leaves nothing behind when an upload is rejected or interrupted", async () => {
     const root = await temporaryRoot();
     const store = new SessionStore({ root });

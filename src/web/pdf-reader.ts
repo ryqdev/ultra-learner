@@ -66,6 +66,8 @@ export interface PdfReaderElements {
 
 export interface PdfReaderCallbacks {
   onFileAccepted: () => void;
+  /** Called each time a page is put on screen, including a redraw of the same page. */
+  onPageShown?: (page: number) => void;
   onToast: (message: string) => void;
 }
 
@@ -180,7 +182,7 @@ export class PdfReaderController {
     this.elements.readerView.classList.remove("sidebar-hidden");
   }
 
-  public async loadPdf(data: Uint8Array, filename: string): Promise<boolean> {
+  public async loadPdf(data: Uint8Array, filename: string, initialPage = 1): Promise<boolean> {
     this.showReader();
     this.setLoading("Parsing PDF…");
     this.setControlsLoading();
@@ -214,7 +216,7 @@ export class PdfReaderController {
       this.linkService.setDocument(pdf);
       this.state.loadingTask = loadingTask;
       this.state.filename = filename;
-      this.state.page = 1;
+      this.state.page = clampPage(initialPage, pdf.numPages);
       this.state.zoom = 1;
       this.state.optionalContentConfigPromise = pdf.getOptionalContentConfig({ intent: "display" });
       this.elements.documentTitle.textContent = documentTitle(filename);
@@ -711,6 +713,7 @@ export class PdfReaderController {
       }
       this.renderedPage = this.state.page;
       this.updateControls();
+      this.callbacks.onPageShown?.(this.state.page);
       this.prefetchAdjacentPages(pdf, this.state.page);
     } catch (error) {
       if (isRenderingCancelled(error) || (error instanceof Error && error.name === "AbortException")) return;

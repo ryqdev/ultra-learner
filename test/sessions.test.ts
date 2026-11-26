@@ -5,6 +5,8 @@ import {
   hasPdfHeader,
   isSessionId,
   isSessionMetadata,
+  isSessionSummary,
+  parseSessionProgress,
   sessionFilenameValidationError,
 } from "../src/lib/sessions.ts";
 
@@ -36,5 +38,19 @@ describe("session metadata helpers", () => {
     expect(isSessionMetadata(metadata)).toBe(true);
     expect(isSessionMetadata({ ...metadata, version: 2 })).toBe(false);
     expect(isSessionMetadata({ ...metadata, createdAt: "not-a-date" })).toBe(false);
+  });
+
+  test("accepts an optional last page and rejects impossible positions", () => {
+    const summary = { id: "session-01", filename: "notes.pdf", fileSize: 128, createdAt: "2026-08-26T03:00:00.000Z" };
+    expect(isSessionSummary(summary)).toBe(true);
+    expect(isSessionSummary({ ...summary, lastPage: 12 })).toBe(true);
+    for (const lastPage of [0, -3, 2.5, "4", null, Number.NaN, Number.MAX_VALUE]) {
+      expect(isSessionSummary({ ...summary, lastPage })).toBe(false);
+    }
+
+    expect(parseSessionProgress({ page: 7, zoom: 2 })).toEqual({ page: 7 });
+    for (const body of [{ page: 0 }, { page: "7" }, { page: 1.5 }, {}, null, 7, "7"]) {
+      expect(() => parseSessionProgress(body)).toThrow("reading position");
+    }
   });
 });

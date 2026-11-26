@@ -81,6 +81,24 @@ export async function deleteSession(
     : "Unable to delete this PDF session.");
 }
 
+/** Record the page a learner has reached. The request may outlive the page that sent it. */
+export async function saveSessionProgress(
+  sessionId: string,
+  page: number,
+  fetcher: SessionFetch = fetch,
+): Promise<void> {
+  const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}/progress`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ page }),
+    keepalive: true,
+  });
+  if (response.ok) return;
+  throw responseError(await responseJson(response), response.status === 404
+    ? "That PDF session is no longer available."
+    : "Unable to save your reading position.");
+}
+
 export function formatSessionDate(value: string, locale?: string): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "Unknown date";

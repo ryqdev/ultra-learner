@@ -7,6 +7,7 @@ import {
   listSessions,
   loadSessionPdf,
   saveSession,
+  saveSessionProgress,
   sessionMeta,
 } from "./session-history.ts";
 import {
@@ -59,6 +60,9 @@ chatResizeHandle.setAttribute("aria-valuemax", String(MAX_CHAT_PANEL_WIDTH));
 chatResizeHandle.setAttribute("aria-valuenow", String(DEFAULT_CHAT_PANEL_WIDTH));
 
 let toastTimer: number | undefined;
+let progressTimer: number | undefined;
+// The newest reading-position write, so history is not re-read while it is still in flight.
+let progressSave: Promise<void> = Promise.resolve();
 let chatResizePointerId: number | null = null;
 let chatResizeStart: { pointerX: number; panelWidth: number } | null = null;
 let sessions: SessionSummary[] = [];
@@ -153,11 +157,30 @@ const reader = new PdfReaderController(
   },
   {
     onFileAccepted: showReader,
+    onPageShown: scheduleProgressSave,
     onToast: showToast,
   },
 );
 
+/** Store the open session's page if it moved since it was last stored. */
+function saveProgressNow(): void {
+  window.clearTimeout(progressTimer);
+  progressTimer = undefined;
+  const session = sessions.find((candidate) => candidate.id === activeSessionId);
+  if (!session || !reader.documentLoaded || (session.lastPage ?? 1) === reader.page) return;
+  session.lastPage = reader.page;
+  // The position is a convenience; a failed save must never interrupt reading.
+  progressSave = saveSessionProgress(session.id, reader.page).catch(() => undefined);
+}
+
+/** Wait for page turns to settle so paging quickly through a document writes once. */
+function scheduleProgressSave(): void {
+  window.clearTimeout(progressTimer);
+  progressTimer = window.setTimeout(saveProgressNow, 400);
+}
+
 function showWelcome(): void {
+  saveProgressNow();
   documentToken += 1;
   reader.reset();
   fileInput.value = "";
@@ -239,6 +262,7 @@ async function refreshHistory(): Promise<void> {
     historyStatus.hidden = false;
   }
   try {
+    await progressSave;
     sessions = await listSessions();
     renderHistory();
   } catch (error) {
@@ -252,17 +276,21 @@ async function refreshHistory(): Promise<void> {
 
 async function openSession(session: SessionSummary): Promise<void> {
   if (openingSessionId || deletingSessionId) return;
+  saveProgressNow();
   const token = ++documentToken;
+  activeSessionId = null;
   openingSessionId = session.id;
   renderHistory();
   try {
     const data = await loadSessionPdf(session);
     if (token !== documentToken) return;
     showReader(session.filename);
-    const loaded = await reader.loadPdf(data, session.filename);
+    const loaded = await reader.loadPdf(data, session.filename, session.lastPage);
     if (loaded && token === documentToken) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
+      // A page turned while the document was still opening had no session to be saved against.
+      scheduleProgressSave();
     }
   } catch (error) {
     showToast(error instanceof Error ? error.message : "Unable to open this PDF session.");
@@ -330,6 +358,7 @@ historyList.addEventListener("click", (event) => {
 });
 
 async function openUploadedFile(file: File): Promise<void> {
+  saveProgressNow();
   const token = ++documentToken;
   activeSessionId = null;
   setTopbarTitle(file.name);
@@ -340,11 +369,16 @@ async function openUploadedFile(file: File): Promise<void> {
     const session = await saveSession(file);
     // The server answers with the stored session when this exact PDF is already in history.
     const alreadyStored = sessions.some((candidate) => candidate.id === session.id);
-    if (!alreadyStored) sessions = [session, ...sessions];
+    sessions = alreadyStored
+      ? sessions.map((candidate) => candidate.id === session.id ? session : candidate)
+      : [session, ...sessions];
     // The upload can outlast the document: only claim the reader if it still shows this file.
     if (token === documentToken) {
       activeSessionId = session.id;
       setTopbarTitle(session.filename);
+      // A document already in history resumes where it was left, unless the learner has moved on.
+      if (session.lastPage && reader.page === 1) void reader.goToPage(session.lastPage);
+      scheduleProgressSave();
     }
     renderHistory();
     showToast(alreadyStored ? "This PDF is already in your local history." : "PDF saved to your local history.");
@@ -552,6 +586,10 @@ window.addEventListener("resize", () => {
   setMobileSidebarOpen(false);
 });
 
-window.addEventListener("beforeunload", () => reader.destroy());
+window.addEventListener("beforeunload", () => {
+  // Destroying the reader forgets the page, so the position has to be sent first.
+  saveProgressNow();
+  reader.destroy();
+});
 
 showWelcome();
