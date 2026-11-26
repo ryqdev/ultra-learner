@@ -9,9 +9,11 @@ import {
   nextZoom,
   readerKeyboardAction,
   readingProgress,
+  rescaledScrollOffset,
   VIM_SCROLL_DURATION_MS,
   VIM_SCROLL_STEP,
   vimPageDelta,
+  vimPagePlacement,
   vimScrollDelta,
   vimScrollProgress,
   zoomLabel,
@@ -52,6 +54,23 @@ describe("reader state helpers", () => {
     expect(vimScrollProgress(180)).toBe(1);
     expect(vimPageDelta("d")).toBe(1);
     expect(vimPageDelta("u")).toBe(-1);
+  });
+
+  test("keeps the reading position when the same page is drawn at another size", () => {
+    // 300px down a 1000px page with a 28px margin is 272px into the page.
+    expect(rescaledScrollOffset(300, 1000, 1100, 28)).toBeCloseTo(28 + 272 * 1.1);
+    expect(rescaledScrollOffset(300, 1000, 500, 28)).toBeCloseTo(28 + 136);
+    expect(rescaledScrollOffset(300, 1000, 1000, 28)).toBe(300);
+    // Still inside the margin above the page: nothing to rescale.
+    expect(rescaledScrollOffset(20, 1000, 2000, 28)).toBe(20);
+    expect(rescaledScrollOffset(0, 1000, 2000)).toBe(0);
+    expect(rescaledScrollOffset(300, 0, 1100)).toBe(0);
+    expect(rescaledScrollOffset(Number.NaN, 1000, 1100)).toBe(0);
+  });
+
+  test("continues a line scroll onto the adjoining edge of the next page", () => {
+    expect(vimPagePlacement("j")).toBe("start");
+    expect(vimPagePlacement("k")).toBe("end");
   });
 
   test("leaves browser zoom shortcuts unhandled", () => {

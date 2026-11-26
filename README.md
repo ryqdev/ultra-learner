@@ -45,10 +45,10 @@ start builds a minified bundle once and keeps it in memory.
 - Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
 - A workspace sidebar with a local reading history: each uploaded PDF becomes a session in `~/.ultra-learner/sessions` and can be reopened or explicitly deleted from the persistent Recents list.
 - Browser-owned PDF parsing and rendering; the Bun server only receives uploaded bytes to persist them on the same device, streaming them to disk and making a session visible only once it is complete.
-- On-demand page thumbnails, previous/next controls, direct page entry with a visible page count, and Vim-friendly keyboard navigation (`j`/`k` scroll and turn the page at the matching edge, `d`/`u` page).
+- On-demand page thumbnails, previous/next controls, direct page entry with a visible page count, and Vim-friendly keyboard navigation (`j`/`k` scroll and continue onto the adjoining page at either edge, `d`/`u` page).
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.
 - Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
-- Zoom controls, fit-to-page behavior, responsive layouts, and a dark reading theme.
+- Zoom controls that keep the current reading position, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A model-configuration-only AI Guide with common hosted/local presets, API-key visibility control, model discovery, reasoning-level selection, connection testing, and named profiles. Profiles are stored in this browser's origin-local storage and can be reused across PDF sessions on the same device. The reader does not currently expose a prompt or send PDF content to a model.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.

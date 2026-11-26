@@ -4,6 +4,8 @@ export const ZOOM_STEP = 0.1;
 export const VIM_SCROLL_STEP = 56;
 export const VIM_SCROLL_DURATION_MS = 90;
 
+/** Where the viewport starts on a newly shown page. */
+export type PagePlacement = "start" | "end";
 export type VimScrollKey = "j" | "k";
 export type VimPageKey = "d" | "u";
 export type ReaderKeyboardAction = "close-sidebar" | VimScrollKey | VimPageKey;
@@ -46,6 +48,28 @@ export function isVimScrollBoundary(
 ): boolean {
   if (key === "k") return scrollTop <= 0;
   return scrollTop + clientHeight >= scrollHeight;
+}
+
+/** A line key that runs off a page continues onto the nearest edge of the next one. */
+export function vimPagePlacement(key: VimScrollKey): PagePlacement {
+  return key === "k" ? "end" : "start";
+}
+
+/**
+ * Carry a scroll offset over to the same page drawn at another size, so the
+ * content at the viewport edge stays put. `leadingSpace` is the fixed margin
+ * before the page, which does not scale with it.
+ */
+export function rescaledScrollOffset(
+  offset: number,
+  previousSize: number,
+  nextSize: number,
+  leadingSpace = 0,
+): number {
+  if (!Number.isFinite(offset) || !(previousSize > 0) || !(nextSize > 0)) return 0;
+  const intoPage = offset - leadingSpace;
+  if (intoPage <= 0) return Math.max(offset, 0);
+  return leadingSpace + intoPage * (nextSize / previousSize);
 }
 
 /** Return the document-page movement associated with Vim's page keys. */

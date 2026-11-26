@@ -15,12 +15,15 @@ import { documentTitle, pdfFileValidationError, pdfOpenErrorMessage } from "../l
 import {
   MAX_ZOOM,
   MIN_ZOOM,
+  type PagePlacement,
   type VimScrollKey,
   clampPage,
   isVimScrollBoundary,
   nextZoom,
   readingProgress,
+  rescaledScrollOffset,
   vimPageDelta,
+  vimPagePlacement,
   vimScrollDelta,
   vimScrollProgress,
   zoomLabel,
@@ -121,6 +124,8 @@ export class PdfReaderController {
   private boxStart: { x: number; y: number } | null = null;
   private openFileVersion = 0;
   private mainPageRendering = false;
+  // The page whose canvas is on screen, so a redraw can be told apart from a page turn.
+  private renderedPage: number | null = null;
   private pendingTextLayer: TextLayerBuilder | null = null;
   private pendingAnnotationLayer: AnnotationLayer | null = null;
   private thumbnailRenderTask: RenderTask | null = null;
@@ -234,7 +239,7 @@ export class PdfReaderController {
     }
   }
 
-  public async goToPage(requestedPage: number): Promise<void> {
+  public async goToPage(requestedPage: number, placement: PagePlacement = "start"): Promise<void> {
     const nextPage = clampPage(requestedPage, this.pageCount);
     if (!this.state.document || nextPage === this.state.page) {
       this.elements.pageInput.value = String(this.state.page);
@@ -242,7 +247,7 @@ export class PdfReaderController {
     }
     this.state.page = nextPage;
     this.clearSelection();
-    await this.renderCurrentPage();
+    await this.renderCurrentPage(false, placement);
   }
 
   public async goToDestination(page: number, explicitDestination: readonly unknown[]): Promise<void> {
@@ -289,7 +294,7 @@ export class PdfReaderController {
         this.elements.readerStage.clientHeight,
         this.elements.readerStage.scrollHeight,
       )) {
-        void this.goToPage(this.state.page + (key === "j" ? 1 : -1));
+        void this.goToPage(this.state.page + (key === "j" ? 1 : -1), vimPagePlacement(key));
         return;
       }
       this.animateVimScroll(key);
@@ -531,6 +536,7 @@ export class PdfReaderController {
     this.pendingAnnotationLayer = null;
     this.thumbnailRenderTask = null;
     this.mainPageRendering = false;
+    this.renderedPage = null;
     this.state.textLayer = null;
     this.state.annotationLayer = null;
     this.state.annotationCanvasMap = null;
@@ -651,7 +657,7 @@ export class PdfReaderController {
     });
   }
 
-  private async renderCurrentPage(recalculateFit = false): Promise<void> {
+  private async renderCurrentPage(recalculateFit = false, placement: PagePlacement = "start"): Promise<void> {
     this.cancelVimScroll();
     const pdf = this.state.document;
     if (!pdf) return;
@@ -768,6 +774,19 @@ export class PdfReaderController {
         return;
       }
 
+      // Redrawing the page already on screen (zoom, layout, layer visibility) must not lose the reader's place.
+      const stage = this.elements.readerStage;
+      const previousView = this.renderedPage === this.state.page && !this.elements.canvasFrame.hidden
+        ? {
+          top: stage.scrollTop,
+          left: stage.scrollLeft,
+          width: this.elements.pageSurface.offsetWidth,
+          height: this.elements.pageSurface.offsetHeight,
+          marginTop: this.elements.canvasFrame.offsetTop,
+          marginLeft: this.elements.canvasFrame.offsetLeft,
+        }
+        : null;
+
       this.state.textLayer?.cancel();
       this.state.annotationLayer?.destroy();
       this.elements.pageSurface.style.width = `${width}px`;
@@ -792,7 +811,15 @@ export class PdfReaderController {
       this.hideLoading();
       this.elements.readerError.hidden = true;
       this.elements.canvasFrame.hidden = false;
-      this.elements.readerStage.scrollTo({ top: 0, left: 0 });
+      if (previousView) {
+        stage.scrollTo({
+          top: rescaledScrollOffset(previousView.top, previousView.height, height, previousView.marginTop),
+          left: rescaledScrollOffset(previousView.left, previousView.width, width, previousView.marginLeft),
+        });
+      } else {
+        stage.scrollTo({ top: placement === "end" ? stage.scrollHeight : 0, left: 0 });
+      }
+      this.renderedPage = this.state.page;
       this.updateControls();
       this.prefetchAdjacentPages(pdf, this.state.page);
     } catch (error) {
