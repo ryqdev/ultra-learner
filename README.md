@@ -36,6 +36,10 @@ For development with automatic server restarts:
 bun run dev
 ```
 
+`bun run dev` sets `NODE_ENV=development`, which rebuilds the unminified browser
+bundle on every request so edits under `src/web/` appear on reload. Every other
+start builds a minified bundle once and keeps it in memory.
+
 ## Current experience
 
 - Drag-and-drop and file-picker entry points for PDFs up to 100 MB.
@@ -53,7 +57,7 @@ bun run dev
 
 ```sh
 bun run start       # Start the local application on port 8881.
-bun run dev         # Start with Bun watch mode.
+bun run dev         # Start in development mode with Bun watch mode.
 bun test            # Run behavior and server tests.
 bun run typecheck   # Check TypeScript without emitting files.
 bun run check       # Run every required local gate.

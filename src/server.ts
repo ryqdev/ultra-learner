@@ -314,11 +314,45 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
   const sessionStore = options.sessionStore ?? new SessionStore({ root: options.sessionRoot });
   const chatFetcher = options.chatFetcher ?? fetch;
   const allowedHosts = allowedHostnames(options);
+  // An installed reader has no NODE_ENV, so development behavior has to be asked for.
+  const development = options.development ?? Bun.env.NODE_ENV === "development";
+  let cachedBundle: Promise<ArrayBuffer | null> | null = null;
+
+  async function buildBrowserBundle(): Promise<ArrayBuffer | null> {
+    try {
+      const build = await Bun.build({
+        entrypoints: [join(root, "src", "web", "app.ts")],
+        target: "browser",
+        format: "esm",
+        minify: !development,
+        sourcemap: "none",
+        // Bun rejects on a failed build by default, which would skip the handled reply.
+        throw: false,
+      });
+      const output = build.outputs[0];
+      if (build.success && output) return await output.arrayBuffer();
+      console.error(build.logs.map((log) => log.message).join("\n") || "Frontend build failed");
+    } catch (error) {
+      console.error(error);
+    }
+    return null;
+  }
+
+  /** Build once for a running reader; rebuild per request only while the browser code is being edited. */
+  function browserBundle(): Promise<ArrayBuffer | null> {
+    if (development) return buildBrowserBundle();
+    cachedBundle ??= buildBrowserBundle().then((bundle) => {
+      // A failed build is not remembered, so the next request tries again.
+      if (!bundle) cachedBundle = null;
+      return bundle;
+    });
+    return cachedBundle;
+  }
 
   return Bun.serve({
     port: options.port ?? Number(Bun.env.PORT ?? 8881),
     hostname: options.hostname ?? "127.0.0.1",
-    development: options.development ?? Bun.env.NODE_ENV !== "production",
+    development,
     async fetch(request) {
       if (!hasAllowedHost(request, allowedHosts)) {
         return new Response("This server only answers requests addressed to its local address.", { status: 403 });
@@ -423,21 +457,9 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
 
       if (url.pathname === "/assets/app.js") {
-        const build = await Bun.build({
-          entrypoints: [join(root, "src", "web", "app.ts")],
-          target: "browser",
-          format: "esm",
-          minify: Bun.env.NODE_ENV === "production",
-          sourcemap: "none",
-        });
-
-        if (!build.success || !build.outputs[0]) {
-          const message = build.logs.map((log) => log.message).join("\n") || "Frontend build failed";
-          console.error(message);
-          return new Response("Unable to build the reader", { status: 500 });
-        }
-
-        return new Response(await build.outputs[0].arrayBuffer(), {
+        const bundle = await browserBundle();
+        if (!bundle) return new Response("Unable to build the reader", { status: 500 });
+        return new Response(bundle, {
           headers: {
             "Cache-Control": "no-store",
             "Content-Type": "text/javascript; charset=utf-8",

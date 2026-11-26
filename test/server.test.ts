@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,6 +21,16 @@ async function sessionRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "ultra-learner-server-"));
   sessionRoots.push(root);
   return root;
+}
+
+/** Create a minimal application root whose browser entry the test controls. */
+async function applicationRoot(entrySource: string): Promise<{ root: string; entry: string }> {
+  const root = await sessionRoot();
+  await mkdir(join(root, "public"));
+  await mkdir(join(root, "src", "web"), { recursive: true });
+  const entry = join(root, "src", "web", "app.ts");
+  await writeFile(entry, entrySource);
+  return { root, entry };
 }
 
 describe("web server", () => {
@@ -131,6 +141,42 @@ describe("web server", () => {
     const page = await pageResponse.text();
     expect(page).toContain('id="chat-toggle"');
     expect(page).not.toContain('id="new-session-button"');
+  });
+
+  test("builds the browser bundle once unless development mode is requested", async () => {
+    const { root, entry } = await applicationRoot('console.log("first build");\n');
+    const bundle = async (): Promise<string> => (await fetch(new URL("/assets/app.js", server!.url))).text();
+
+    server = createAppServer({ port: 0, root, sessionRoot: await sessionRoot() });
+    expect(server.development).toBe(false);
+    expect(await bundle()).toContain("first build");
+    await writeFile(entry, 'console.log("second build");\n');
+    expect(await bundle()).toContain("first build");
+
+    server.stop(true);
+    server = createAppServer({ port: 0, root, development: true, sessionRoot: await sessionRoot() });
+    expect(await bundle()).toContain("second build");
+    await writeFile(entry, 'console.log("third build");\n');
+    expect(await bundle()).toContain("third build");
+  });
+
+  test("reports a failed browser build plainly and recovers once the source is fixed", async () => {
+    const { root, entry } = await applicationRoot("const = ;\n");
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      server = createAppServer({ port: 0, root, sessionRoot: await sessionRoot() });
+      const failed = await fetch(new URL("/assets/app.js", server.url));
+      expect(failed.status).toBe(500);
+      expect(await failed.text()).toBe("Unable to build the reader");
+      expect(logged).toHaveBeenCalled();
+
+      await writeFile(entry, 'console.log("repaired");\n');
+      const repaired = await fetch(new URL("/assets/app.js", server.url));
+      expect(repaired.status).toBe(200);
+      expect(await repaired.text()).toContain("repaired");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   test("forwards chat requests through the same-origin proxy", async () => {
