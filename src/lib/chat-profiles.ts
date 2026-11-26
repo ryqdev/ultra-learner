@@ -28,9 +28,14 @@ export interface ModelCatalog {
   models: ChatModel[];
 }
 
+/** The name an unnamed setup takes from its model, cut to what a name may hold. */
+function modelProfileName(model: string): string {
+  return model.trim().slice(0, MAXIMUM_CHAT_PROFILE_NAME_LENGTH).trim();
+}
+
 /** A setup saved without a name of its own is called after its model. */
 export function resolveProfileName(requestedName: string, model: string): string {
-  return requestedName.trim() || model.trim();
+  return requestedName.trim() || modelProfileName(model);
 }
 
 /**
@@ -39,7 +44,7 @@ export function resolveProfileName(requestedName: string, model: string): string
  * labelled with the model it no longer uses.
  */
 export function editableProfileName(profile: Pick<ChatProfile, "name" | "model">): string {
-  return profile.name === profile.model ? "" : profile.name;
+  return profile.name === modelProfileName(profile.model) ? "" : profile.name;
 }
 
 /**
