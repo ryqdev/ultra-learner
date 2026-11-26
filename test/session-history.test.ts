@@ -67,7 +67,7 @@ describe("browser session transport", () => {
 
   test("sends the reading position and keeps a session's last page from the list", async () => {
     let request: Request | undefined;
-    const order = { writer: "tab-1", sequence: 3 };
+    const order = { writer: "tab-1", sequence: 3, recordedAt: 1_795_000_000_000 };
     await saveSessionProgress(session.id, { page: 14, order }, async (input, init) => {
       const target = typeof input === "string" && input.startsWith("/") ? `http://local.test${input}` : input;
       request = new Request(target, init);
@@ -76,7 +76,7 @@ describe("browser session transport", () => {
     });
     expect(request?.method).toBe("PUT");
     expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}/progress`);
-    expect(await request!.json()).toEqual({ page: 14, writer: "tab-1", sequence: 3 });
+    expect(await request!.json()).toEqual({ page: 14, ...order });
 
     await expect(saveSessionProgress(session.id, { page: 14 }, async () => new Response("Not found", { status: 404 })))
       .rejects.toThrow("no longer available");

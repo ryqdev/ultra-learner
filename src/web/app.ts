@@ -177,7 +177,7 @@ function saveProgressNow(): void {
   progressSequence += 1;
   progressSave = saveSessionProgress(session.id, {
     page: reader.page,
-    order: { writer: progressWriter, sequence: progressSequence },
+    order: { writer: progressWriter, sequence: progressSequence, recordedAt: Date.now() },
   }).catch(() => undefined);
 }
 

@@ -146,20 +146,43 @@ describe("local PDF session store", () => {
 
     // Requests issued together are applied one after another, never interleaved.
     await Promise.all(Array.from({ length: 12 }, (_, index) =>
-      store.saveProgress("reading", index + 1, { writer: "tab-a", sequence: index + 1 })));
+      store.saveProgress("reading", index + 1, { writer: "tab-a", sequence: index + 1, recordedAt: 0 })));
     expect(await lastPage()).toBe(12);
 
     // An update that left the page earlier but arrived later must not win.
-    await store.saveProgress("reading", 2, { writer: "tab-a", sequence: 5 });
+    await store.saveProgress("reading", 2, { writer: "tab-a", sequence: 5, recordedAt: 9 });
     expect(await lastPage()).toBe(12);
-    await store.saveProgress("reading", 20, { writer: "tab-a", sequence: 13 });
+    await store.saveProgress("reading", 20, { writer: "tab-a", sequence: 13, recordedAt: 0 });
     expect(await lastPage()).toBe(20);
 
     // Another tab numbers its own updates, and an unnumbered update always applies.
-    await store.saveProgress("reading", 7, { writer: "tab-b", sequence: 1 });
+    await store.saveProgress("reading", 7, { writer: "tab-b", sequence: 1, recordedAt: 0 });
     expect(await lastPage()).toBe(7);
     await store.saveProgress("reading", 3);
     expect(await lastPage()).toBe(3);
+  });
+
+  test("does not let a closed tab's late update undo the tab that replaced it", async () => {
+    const root = await temporaryRoot();
+    let now = Date.parse("2026-11-26T10:00:00.000Z");
+    const store = new SessionStore({ root, createId: () => "reading", clock: () => new Date(now) });
+    await store.createSession("notes.pdf", pdf);
+    const lastPage = async (): Promise<number | undefined> => (await store.listSessions())[0]?.lastPage;
+
+    await store.saveProgress("reading", 31, { writer: "new-tab", sequence: 1, recordedAt: now });
+    // Recorded five seconds earlier by the tab that was closing, delivered two seconds later.
+    now += 2_000;
+    await store.saveProgress("reading", 30, { writer: "old-tab", sequence: 9, recordedAt: now - 7_000 });
+    expect(await lastPage()).toBe(31);
+
+    // Recorded later by yet another tab: applied at once.
+    await store.saveProgress("reading", 32, { writer: "third-tab", sequence: 1, recordedAt: now });
+    expect(await lastPage()).toBe(32);
+
+    // Long after, a device whose clock runs behind is not shut out by the comparison.
+    now += 60_000;
+    await store.saveProgress("reading", 12, { writer: "slow-clock", sequence: 1, recordedAt: 1_000 });
+    expect(await lastPage()).toBe(12);
   });
 
   test("finishes pending position updates before deleting their session", async () => {

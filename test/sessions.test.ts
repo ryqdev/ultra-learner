@@ -59,21 +59,25 @@ describe("session metadata helpers", () => {
     }
   });
 
-  test("accepts a numbered position update only when its writer and sequence are both usable", () => {
-    expect(parseSessionProgress({ page: 7, writer: "mabc12-x9", sequence: 4 }))
-      .toEqual({ page: 7, order: { writer: "mabc12-x9", sequence: 4 } });
-    for (const order of [
-      { writer: "tab" },
-      { sequence: 4 },
-      { writer: "", sequence: 4 },
-      { writer: "has space", sequence: 4 },
-      { writer: "x".repeat(65), sequence: 4 },
-      { writer: "tab", sequence: -1 },
-      { writer: "tab", sequence: 1.5 },
-      { writer: "tab", sequence: "4" },
-      { writer: 7, sequence: 4 },
+  test("accepts an ordered position update only when its writer, sequence, and time are all usable", () => {
+    const order = { writer: "mabc12-x9", sequence: 4, recordedAt: 1_795_000_000_000 };
+    expect(parseSessionProgress({ page: 7, ...order })).toEqual({ page: 7, order });
+    for (const change of [
+      { writer: undefined },
+      { sequence: undefined },
+      { recordedAt: undefined },
+      { writer: "" },
+      { writer: "has space" },
+      { writer: "x".repeat(65) },
+      { writer: 7 },
+      { sequence: -1 },
+      { sequence: 1.5 },
+      { sequence: "4" },
+      { recordedAt: -1 },
+      { recordedAt: "now" },
+      { recordedAt: Number.NaN },
     ]) {
-      expect(() => parseSessionProgress({ page: 7, ...order })).toThrow("writer and sequence");
+      expect(() => parseSessionProgress({ page: 7, ...order, ...change })).toThrow("writer, sequence, and time");
     }
   });
 });

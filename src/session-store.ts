@@ -28,6 +28,11 @@ const PROGRESS_VERSION = 1;
 // The leading dot keeps an upload in progress from ever reading as a session ID.
 const INCOMING_PREFIX = ".incoming-";
 const PDF_HEADER_WINDOW = 1_024;
+/**
+ * How long after a position update one from another page load is still judged
+ * by its recorded time. Kept short because two devices' clocks need not agree.
+ */
+const PROGRESS_REORDER_WINDOW_MS = 10_000;
 /** Entries newer than this may still be written by another running reader. */
 const INCOMPLETE_ENTRY_GRACE_MS = 60 * 60 * 1000;
 
@@ -90,7 +95,7 @@ export class SessionStore {
   // Changes to one session's directory that are still running or waiting.
   private readonly sessionChanges = new Map<string, Promise<unknown>>();
   // The newest numbered position update applied to each session since this store started.
-  private readonly appliedProgress = new Map<string, ProgressOrder>();
+  private readonly appliedProgress = new Map<string, ProgressOrder & { appliedAt: number }>();
 
   public constructor(options: SessionStoreOptions = {}) {
     this.root = options.root ?? join(homedir(), ".ultra-learner");
@@ -198,9 +203,8 @@ export class SessionStore {
   /**
    * Remember the page a learner has reached, replacing any earlier position.
    * Writes for one session run one at a time in the order they were requested,
-   * and a numbered update older than one already applied from the same writer
-   * is dropped, because a browser's two requests need not arrive in the order
-   * they were sent.
+   * and an ordered update that an already applied one supersedes is dropped,
+   * because a browser's requests need not arrive in the order they were sent.
    */
   public async saveProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
     if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
@@ -225,7 +229,15 @@ export class SessionStore {
 
   private async writeProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
     const applied = this.appliedProgress.get(id);
-    if (order && applied?.writer === order.writer && order.sequence < applied.sequence) return;
+    const now = this.clock().getTime();
+    if (order && applied) {
+      const superseded = order.writer === applied.writer
+        ? order.sequence < applied.sequence
+        // Another page load, typically a closing tab's last write overtaken by the tab that
+        // replaced it. Its numbering is unrelated, so compare when each was recorded.
+        : order.recordedAt < applied.recordedAt && now - applied.appliedAt < PROGRESS_REORDER_WINDOW_MS;
+      if (superseded) return;
+    }
 
     await this.getSessionDocument(id);
     const directory = this.sessionDirectory(id);
@@ -239,7 +251,7 @@ export class SessionStore {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new SessionNotFoundError();
       throw error;
     }
-    if (order) this.appliedProgress.set(id, order);
+    if (order) this.appliedProgress.set(id, { ...order, appliedAt: now });
   }
 
   public async deleteSession(id: string): Promise<void> {
