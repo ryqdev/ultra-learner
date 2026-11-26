@@ -37,8 +37,6 @@ On desktop, the separator on the AI guide's left edge adjusts its grid track wit
 
 The thumbnail rail is a flex-constrained vertical scroll region independent from the main page stage and starts open so page navigation is immediately visible. It holds a correctly sized placeholder for every page and draws a thumbnail only when an `IntersectionObserver` reports it within one rail-height of the visible area, one at a time and always yielding to main-page rendering, so a long document costs what the reader scrolls past rather than a render per page. The toolbar exposes the current page and total page count through a numeric jump field. Compact layouts keep the essential page controls in normal flex flow while progressively hiding secondary zoom controls, so controls cannot occupy the same coordinates. When the reader has focus, `j` and `k` move the stage by a short 56-pixel increment with a fast 90-millisecond ease-out animation and change to the next or previous page when the matching scroll edge has been reached, arriving at the top of the next page or the bottom of the previous one so line scrolling reads continuously in both directions; `d` and `u` change pages directly and always arrive at the top. Redrawing the page already on screen, for a zoom step, a layout change, or a layer toggle, rescales the scroll offset to the new page size instead of returning to the top. Form fields retain their normal typing behavior.
 
-`src/web/sample.ts` creates a small valid PDF with internal links in memory. The sample enters through the same `loadPdf` function as a selected file, so it demonstrates the real rendering and destination path rather than a separate mock screen.
-
 `src/lib/` contains deterministic validation and reader-state helpers. These functions have no DOM or PDF.js dependency and carry the fine-grained behavior tests.
 
 ## Bun server
@@ -65,6 +63,6 @@ The interface itself uses browser APIs and repository-owned TypeScript, HTML, an
 - HTTP tests cover the application shell, browser bundle, health endpoint, chat/model proxy forwarding, session creation/list/retrieval/deletion, method boundaries, and static-file containment.
 - `bun run test:package` packs the public file allowlist, installs the tarball with hoisted dependencies and an isolated cache, and runs the real bunx command outside the repository. It checks help/version, server startup, the browser bundle, and PDF.js worker, stylesheet, font, and WASM assets without touching saved sessions.
 - `bun run typecheck` covers server, browser, test, and repository-script TypeScript.
-- Browser verification exercises the generated sample through the real PDF worker, canvas renderer, and responsive UI.
+- Browser verification opens a real PDF through the PDF worker, canvas renderer, and responsive UI; no automated browser suite runs in CI yet.
 
 `bun run check` is the repository-wide local gate and also validates the agent-facing project structure.

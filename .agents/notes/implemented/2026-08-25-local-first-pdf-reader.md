@@ -16,7 +16,7 @@ After a selected file passes local type and size validation, the reader switches
 
 PDF.js parsing and rendering failures retain a short, normalized diagnostic in the reader instead of being flattened into an invalid-file message. Known password, invalid-document, and browser-feature failures still receive concise guidance, while unexpected errors expose enough detail to diagnose the browser integration without opening developer tools.
 
-A small sample PDF is generated in browser memory and passed through the same loading and rendering path as a user-selected document. This makes the initial experience immediately inspectable while avoiding a binary sample fixture and preventing the demo from drifting into a separate mock implementation.
+A small sample PDF is generated in browser memory and passed through the same loading and rendering path as a user-selected document. This makes the initial experience immediately inspectable while avoiding a binary sample fixture and preventing the demo from drifting into a separate mock implementation. The [focused library entry](2026-08-27-focused-library-entry.md) decision later removed the sample's entry point, and the generator, by then unused, was deleted.
 
 ## Alternatives considered
 

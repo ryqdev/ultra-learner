@@ -2,7 +2,7 @@
 
 Ultra Learner is a calm, local-first PDF reader built with Bun and TypeScript. It gives a learner a focused place to open a document, browse page thumbnails, move between pages, and adjust the reading scale. Uploaded PDFs are retained by the local Bun process in `~/.ultra-learner` so they can be reopened from the reading history. A right-hand AI Guide stores reusable OpenAI-compatible model settings for future learning features.
 
-This is the first product prototype. It includes a built-in four-page field guide so the complete reading experience can be explored without finding a PDF first.
+This is the first product prototype.
 
 ## Try it
 
@@ -28,7 +28,7 @@ bun install
 bun run start
 ```
 
-Open `http://127.0.0.1:8881`, then drop in a PDF, choose one from the device, or open the sample field guide.
+Open `http://127.0.0.1:8881`, then drop in a PDF or choose one from the device.
 
 For development with automatic server restarts:
 
@@ -51,7 +51,6 @@ start builds a minified bundle once and keeps it in memory.
 - Zoom controls that keep the current reading position, fit-to-page behavior, responsive layouts, and a dark reading theme.
 - A model-configuration-only AI Guide with common hosted/local presets, API-key visibility control, model discovery, reasoning-level selection, connection testing, and profiles that take an optional name and otherwise follow their model. Profiles are stored in this browser's origin-local storage and can be reused across PDF sessions on the same device. The reader does not currently expose a prompt or send PDF content to a model.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
-- A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.
 
 ## Commands
 
@@ -77,7 +76,7 @@ public/             HTML and visual styles.
 src/index.ts        Application entry point.
 src/server.ts       Bun HTTP server, session API, and browser bundle endpoint.
 src/session-store.ts Local PDF session persistence.
-src/web/            Reader, history, model-configuration UI, and generated sample document.
+src/web/            Reader, history, and model-configuration UI.
 src/lib/            Deterministic file, session, reader, selection, chat transport, and provider-profile helpers.
 test/               Behavior and HTTP boundary tests.
 docs/               Stable architecture guidance.

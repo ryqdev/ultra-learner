@@ -21,7 +21,7 @@ The sidebar now keeps only conversation and library navigation; PDF selection re
 ## Consequences
 
 - New users see one clear PDF entry point when they are in the Library view.
-- Opening the bundled sample is no longer available from the interface.
+- Opening the bundled sample is no longer available from the interface. Its generator was removed afterwards, since nothing else called it and the documentation still advertised it.
 - Opening another PDF now intentionally starts from the Library, keeping file selection in one focused surface.
 - The home layout has fewer decorative and explanatory elements and adapts as a single centered column across desktop and compact widths.
 - The sidebar contract and architecture documentation now describe only the controls that are actually present.
