@@ -44,8 +44,10 @@ describe("browser session transport", () => {
     expect(await loadSessionPdf(session, async () => new Response(pdf))).toEqual(pdf);
     await expect(loadSessionPdf(session, async () => new Response("", { status: 404 })))
       .rejects.toThrow("no longer available");
-    await expect(listSessions(async () => Response.json({ error: "Disk unavailable" }, { status: 500 })))
+    await expect(listSessions(async () => Response.json({ error: { message: "Disk unavailable" } }, { status: 500 })))
       .rejects.toThrow("Disk unavailable");
+    await expect(listSessions(async () => new Response("<html>proxy error</html>", { status: 502 })))
+      .rejects.toThrow("Unable to load your PDF history.");
   });
 
   test("deletes a persisted session and reports missing sessions", async () => {

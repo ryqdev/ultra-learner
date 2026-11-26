@@ -43,7 +43,7 @@ The thumbnail rail is a flex-constrained vertical scroll region independent from
 
 ## Bun server
 
-`src/server.ts` serves `public/`, exposes a small health endpoint, bundles the TypeScript browser entry with `Bun.build`, serves the installed PDF.js worker and standard-font assets, and proxies chat requests through `/api/chat/completions`, `/api/chat/models` model discovery, and the minimal `/api/chat/test` connection check. It also exposes four same-origin session operations: list session summaries, create a session from raw PDF bytes, retrieve one session's document, and delete one session.
+`src/server.ts` serves `public/`, exposes a small health endpoint, bundles the TypeScript browser entry with `Bun.build`, serves the installed PDF.js worker and standard-font assets, and proxies chat requests through `/api/chat/completions`, `/api/chat/models` model discovery, and the minimal `/api/chat/test` connection check. It also exposes four same-origin session operations: list session summaries, create a session from raw PDF bytes, retrieve one session's document, and delete one session. Model routes share one bounded JSON reader and one provider-forwarding path, and every API error reply has the shape `{ "error": { "message": string } }`.
 
 The server binds to loopback and rejects, with `403`, any request whose `Host` header is not `127.0.0.1`, `localhost`, `[::1]`, its configured bind address, or a name passed through `allowedHosts` (`--allow-host` on the CLI). Without this check a page on another domain could rebind its DNS name to loopback and call the session API as a same-origin client.
 

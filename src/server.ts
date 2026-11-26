@@ -13,6 +13,7 @@ import {
   parseChatModelsPayload,
   parseChatTestPayload,
   type ChatFetcher,
+  type ChatMessage,
 } from "./lib/chat.ts";
 import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
 import { SessionNotFoundError, SessionStore, type SessionStoreOptions } from "./session-store.ts";
@@ -80,38 +81,6 @@ async function readBodyBytes(body: ReadableStream<Uint8Array> | null, maximumSiz
   return data;
 }
 
-async function readRequestBytes(request: Request, maximumSize: number): Promise<Uint8Array> {
-  return readBodyBytes(request.body, maximumSize);
-}
-
-async function readResponseText(response: Response, maximumSize: number): Promise<string> {
-  if (!response.body) return "";
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maximumSize) {
-        await reader.cancel();
-        throw new PayloadTooLargeError();
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
 function hasOversizedContentLength(headers: Headers, maximumSize: number): boolean {
   const value = headers.get("content-length");
   if (value === null) return false;
@@ -126,225 +95,146 @@ function jsonError(message: string, status: number): Response {
   });
 }
 
+function methodNotAllowed(allow: string): Response {
+  return new Response("Method not allowed", { status: 405, headers: { Allow: allow } });
+}
+
 function bearerToken(request: Request): string | undefined {
   const value = request.headers.get("authorization")?.trim();
   const match = value?.match(/^Bearer\s+(\S+)$/i);
   return match?.[1] ? `Bearer ${match[1]}` : undefined;
 }
 
-async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Promise<Response> {
-  const authorization = bearerToken(request);
-  if (!authorization) return jsonError("An API key is required.", 401);
-
-  const contentLengthHeader = request.headers.get("content-length");
-  const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
-  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_CHAT_REQUEST_SIZE) {
-    return jsonError("The chat request is too large.", 413);
+/** Read and validate a bounded JSON body, or produce the error response that explains why not. */
+async function readJsonPayload<T>(
+  request: Request,
+  description: string,
+  parse: (value: unknown) => T,
+): Promise<T | Response> {
+  if (hasOversizedContentLength(request.headers, MAXIMUM_CHAT_REQUEST_SIZE)) {
+    return jsonError(`The ${description} is too large.`, 413);
   }
-
-  let payload: ReturnType<typeof parseChatProxyPayload>;
   try {
-    const bytes = await readRequestBytes(request, MAXIMUM_CHAT_REQUEST_SIZE);
-    payload = parseChatProxyPayload(JSON.parse(new TextDecoder().decode(bytes)));
+    const bytes = await readBodyBytes(request.body, MAXIMUM_CHAT_REQUEST_SIZE);
+    return parse(JSON.parse(new TextDecoder().decode(bytes)));
   } catch (error) {
-    if (error instanceof PayloadTooLargeError) return jsonError("The chat request is too large.", 413);
+    if (error instanceof PayloadTooLargeError) return jsonError(`The ${description} is too large.`, 413);
     if (error instanceof Error) return jsonError(error.message, 400);
-    return jsonError("Unable to read the chat request.", 400);
+    return jsonError(`Unable to read the ${description}.`, 400);
   }
+}
 
-  const upstreamUrl = chatCompletionsUrl(payload.baseUrl);
+interface ProviderRequest {
+  url: string;
+  authorization: string;
+  /** A JSON body makes this a POST; without one the provider receives a GET. */
+  body?: unknown;
+  maximumResponseSize: number;
+  tooLargeMessage: string;
+}
+
+/** Relay one bounded, time-limited request to the model provider and pass its answer through. */
+async function forwardToProvider(fetcher: ChatFetcher, request: ProviderRequest): Promise<Response> {
+  const timedOut = (): Response =>
+    jsonError("The model provider timed out. Check the provider and try again.", 504);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHAT_PROVIDER_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetcher(upstreamUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        Authorization: authorization,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: payload.model,
-        messages: payload.messages,
-        stream: false,
-        ...(payload.reasoningEffort ? { reasoning_effort: payload.reasoningEffort } : {}),
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      return jsonError("The model provider timed out. Check the provider and try again.", 504);
+    let response: Response;
+    try {
+      response = await fetcher(request.url, request.body === undefined
+        ? {
+          method: "GET",
+          headers: { Accept: "application/json", Authorization: request.authorization },
+          signal: controller.signal,
+        }
+        : {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: request.authorization,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request.body),
+          signal: controller.signal,
+        });
+    } catch {
+      if (controller.signal.aborted) return timedOut();
+      return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
     }
-    return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
-  }
-  try {
-    const body = await readResponseText(response, MAXIMUM_CHAT_RESPONSE_SIZE);
-    return new Response(body, {
-      status: response.status,
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch (error) {
-    if (controller.signal.aborted) return jsonError("The model provider timed out. Check the provider and try again.", 504);
-    if (error instanceof PayloadTooLargeError) return jsonError("The model response is too large.", 502);
-    return jsonError("Unable to read the model provider response.", 502);
+
+    try {
+      if (hasOversizedContentLength(response.headers, request.maximumResponseSize)) {
+        await response.body?.cancel();
+        return jsonError(request.tooLargeMessage, 502);
+      }
+      const body = new TextDecoder().decode(await readBodyBytes(response.body, request.maximumResponseSize));
+      return new Response(body, {
+        status: response.status,
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return timedOut();
+      if (error instanceof PayloadTooLargeError) return jsonError(request.tooLargeMessage, 502);
+      return jsonError("Unable to read the model provider response.", 502);
+    }
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function forwardChatRequest(
-  request: Request,
-  fetcher: ChatFetcher,
-  payload: {
-    baseUrl: string;
-    model: string;
-    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
-    reasoningEffort?: string;
-  },
-  missingPayloadMessage: string,
-): Promise<Response> {
+function completionBody(model: string, messages: ChatMessage[], reasoningEffort?: string): unknown {
+  return {
+    model,
+    messages,
+    stream: false,
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+  };
+}
+
+async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Promise<Response> {
   const authorization = bearerToken(request);
   if (!authorization) return jsonError("An API key is required.", 401);
-
-  const upstreamUrl = chatCompletionsUrl(payload.baseUrl);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CHAT_PROVIDER_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetcher(upstreamUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        Authorization: authorization,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: payload.model,
-        messages: payload.messages,
-        stream: false,
-        ...(payload.reasoningEffort ? { reasoning_effort: payload.reasoningEffort } : {}),
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      return jsonError("The model provider timed out. Check the provider and try again.", 504);
-    }
-    return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
-  }
-  try {
-    const body = await readResponseText(response, MAXIMUM_CHAT_RESPONSE_SIZE);
-    return new Response(body, {
-      status: response.status,
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch (error) {
-    if (controller.signal.aborted) return jsonError("The model provider timed out. Check the provider and try again.", 504);
-    if (error instanceof PayloadTooLargeError) return jsonError("The model response is too large.", 502);
-    return jsonError(missingPayloadMessage, 502);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const payload = await readJsonPayload(request, "chat request", parseChatProxyPayload);
+  if (payload instanceof Response) return payload;
+  return forwardToProvider(fetcher, {
+    url: chatCompletionsUrl(payload.baseUrl),
+    authorization,
+    body: completionBody(payload.model, payload.messages, payload.reasoningEffort),
+    maximumResponseSize: MAXIMUM_CHAT_RESPONSE_SIZE,
+    tooLargeMessage: "The model response is too large.",
+  });
 }
 
 async function testChatProvider(request: Request, fetcher: ChatFetcher): Promise<Response> {
   const authorization = bearerToken(request);
   if (!authorization) return jsonError("An API key is required.", 401);
-
-  const contentLengthHeader = request.headers.get("content-length");
-  const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
-  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_CHAT_REQUEST_SIZE) {
-    return jsonError("The chat test request is too large.", 413);
-  }
-
-  let payload: ReturnType<typeof parseChatTestPayload>;
-  try {
-    const bytes = await readRequestBytes(request, MAXIMUM_CHAT_REQUEST_SIZE);
-    payload = parseChatTestPayload(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch (error) {
-    if (error instanceof PayloadTooLargeError) return jsonError("The chat test request is too large.", 413);
-    if (error instanceof Error) return jsonError(error.message, 400);
-    return jsonError("Unable to read the chat test request.", 400);
-  }
-
-  return forwardChatRequest(request, fetcher, {
-    baseUrl: payload.baseUrl,
-    model: payload.model,
-    reasoningEffort: payload.reasoningEffort,
-    messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
-  }, "Unable to read the model provider response.");
+  const payload = await readJsonPayload(request, "chat test request", parseChatTestPayload);
+  if (payload instanceof Response) return payload;
+  return forwardToProvider(fetcher, {
+    url: chatCompletionsUrl(payload.baseUrl),
+    authorization,
+    body: completionBody(payload.model, [{ role: "user", content: CHAT_TEST_MESSAGE }], payload.reasoningEffort),
+    maximumResponseSize: MAXIMUM_CHAT_RESPONSE_SIZE,
+    tooLargeMessage: "The model response is too large.",
+  });
 }
 
 async function listChatModels(request: Request, fetcher: ChatFetcher): Promise<Response> {
   const authorization = bearerToken(request);
   if (!authorization) return jsonError("An API key is required.", 401);
-
-  const contentLengthHeader = request.headers.get("content-length");
-  const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
-  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_CHAT_REQUEST_SIZE) {
-    return jsonError("The model list request is too large.", 413);
-  }
-
-  let payload: ReturnType<typeof parseChatModelsPayload>;
-  try {
-    const bytes = await readRequestBytes(request, MAXIMUM_CHAT_REQUEST_SIZE);
-    payload = parseChatModelsPayload(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch (error) {
-    if (error instanceof PayloadTooLargeError) return jsonError("The model list request is too large.", 413);
-    if (error instanceof Error) return jsonError(error.message, 400);
-    return jsonError("Unable to read the model list request.", 400);
-  }
-
-  const upstreamUrl = chatModelsUrl(payload.baseUrl);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CHAT_PROVIDER_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetcher(upstreamUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: authorization,
-      },
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      return jsonError("The model provider timed out. Check the provider and try again.", 504);
-    }
-    return jsonError("Unable to reach the model provider. Check the Base URL and that the provider is running.", 502);
-  }
-
-  try {
-    if (hasOversizedContentLength(response.headers, MAXIMUM_CHAT_MODELS_RESPONSE_SIZE)) {
-      await response.body?.cancel();
-      return jsonError("The model list response is too large.", 502);
-    }
-    const body = await readResponseText(response, MAXIMUM_CHAT_MODELS_RESPONSE_SIZE);
-    return new Response(body, {
-      status: response.status,
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch (error) {
-    if (controller.signal.aborted) return jsonError("The model provider timed out. Check the provider and try again.", 504);
-    if (error instanceof PayloadTooLargeError) return jsonError("The model list response is too large.", 502);
-    return jsonError("Unable to read the model provider response.", 502);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const payload = await readJsonPayload(request, "model list request", parseChatModelsPayload);
+  if (payload instanceof Response) return payload;
+  return forwardToProvider(fetcher, {
+    url: chatModelsUrl(payload.baseUrl),
+    authorization,
+    maximumResponseSize: MAXIMUM_CHAT_MODELS_RESPONSE_SIZE,
+    tooLargeMessage: "The model list response is too large.",
+  });
 }
 
 type PathApi = Pick<typeof path, "isAbsolute" | "normalize" | "relative" | "resolve" | "sep">;
@@ -436,30 +326,22 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       const url = new URL(request.url);
 
       if (url.pathname === "/health") {
-        if (request.method !== "GET" && request.method !== "HEAD") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
-        }
+        if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
         return Response.json({ status: "ok" });
       }
 
       if (url.pathname === CHAT_PROXY_PATH) {
-        if (request.method !== "POST") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
-        }
+        if (request.method !== "POST") return methodNotAllowed("POST");
         return proxyChatCompletion(request, chatFetcher);
       }
 
       if (url.pathname === CHAT_TEST_PATH) {
-        if (request.method !== "POST") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
-        }
+        if (request.method !== "POST") return methodNotAllowed("POST");
         return testChatProvider(request, chatFetcher);
       }
 
       if (url.pathname === CHAT_MODELS_PATH) {
-        if (request.method !== "POST") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
-        }
+        if (request.method !== "POST") return methodNotAllowed("POST");
         return listChatModels(request, chatFetcher);
       }
 
@@ -471,14 +353,12 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
             });
           } catch (error) {
             console.error(error);
-            return Response.json({ error: "Unable to load the PDF session history." }, { status: 500 });
+            return jsonError("Unable to load the PDF session history.", 500);
           }
         }
         if (request.method === "POST") {
-          const contentLengthHeader = request.headers.get("content-length");
-          const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
-          if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAXIMUM_PDF_FILE_SIZE) {
-            return Response.json({ error: "That PDF is larger than 100 MB." }, { status: 413 });
+          if (hasOversizedContentLength(request.headers, MAXIMUM_PDF_FILE_SIZE)) {
+            return jsonError("That PDF is larger than 100 MB.", 413);
           }
 
           const encodedFilename = request.headers.get("x-ultra-learner-filename");
@@ -486,30 +366,26 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
           try {
             filename = encodedFilename ? decodeURIComponent(encodedFilename) : "";
           } catch {
-            return Response.json({ error: "The PDF filename is invalid." }, { status: 400 });
+            return jsonError("The PDF filename is invalid.", 400);
           }
 
           try {
-            const data = await readRequestBytes(request, MAXIMUM_PDF_FILE_SIZE);
+            const data = await readBodyBytes(request.body, MAXIMUM_PDF_FILE_SIZE);
             const session = await sessionStore.createSession(filename, data);
             return Response.json({ session }, { status: 201, headers: { "Cache-Control": "no-store" } });
           } catch (error) {
-            if (error instanceof PayloadTooLargeError) {
-              return Response.json({ error: "That PDF is larger than 100 MB." }, { status: 413 });
-            }
-            if (error instanceof TypeError) return Response.json({ error: error.message }, { status: 400 });
+            if (error instanceof PayloadTooLargeError) return jsonError("That PDF is larger than 100 MB.", 413);
+            if (error instanceof TypeError) return jsonError(error.message, 400);
             console.error(error);
-            return Response.json({ error: "Unable to save the PDF session." }, { status: 500 });
+            return jsonError("Unable to save the PDF session.", 500);
           }
         }
-        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } });
+        return methodNotAllowed("GET, HEAD, POST");
       }
 
       const sessionDocumentMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/document$/);
       if (sessionDocumentMatch) {
-        if (request.method !== "GET" && request.method !== "HEAD") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
-        }
+        if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
         try {
           const document = await sessionStore.getSessionDocument(decodeURIComponent(sessionDocumentMatch[1] ?? ""));
           return new Response(Bun.file(document.path), {
@@ -531,9 +407,7 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
 
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (sessionMatch) {
-        if (request.method !== "DELETE") {
-          return new Response("Method not allowed", { status: 405, headers: { Allow: "DELETE" } });
-        }
+        if (request.method !== "DELETE") return methodNotAllowed("DELETE");
         try {
           await sessionStore.deleteSession(decodeURIComponent(sessionMatch[1] ?? ""));
           return new Response(null, { status: 204 });
@@ -542,13 +416,11 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
             return new Response("Not found", { status: 404 });
           }
           console.error(error);
-          return Response.json({ error: "Unable to delete the PDF session." }, { status: 500 });
+          return jsonError("Unable to delete the PDF session.", 500);
         }
       }
 
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
-      }
+      if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
 
       if (url.pathname === "/assets/app.js") {
         const build = await Bun.build({

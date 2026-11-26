@@ -409,7 +409,9 @@ describe("web server", () => {
       body: "not a PDF",
     });
     expect(invalidResponse.status).toBe(400);
-    expect(await invalidResponse.json()).toEqual({ error: "The uploaded file does not contain a PDF header." });
+    expect(await invalidResponse.json()).toEqual({
+      error: { message: "The uploaded file does not contain a PDF header." },
+    });
 
     const missingResponse = await fetch(new URL("/api/sessions/missing/document", server.url));
     expect(missingResponse.status).toBe(404);
