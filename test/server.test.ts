@@ -452,6 +452,15 @@ describe("web server", () => {
     expect(await (await fetch(new URL("/api/sessions", server.url))).json())
       .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
 
+    // A numbered update that arrives after a newer one from the same page is accepted but not applied.
+    expect((await put(JSON.stringify({ page: 12, writer: "tab-1", sequence: 2 }))).status).toBe(204);
+    expect((await put(JSON.stringify({ page: 11, writer: "tab-1", sequence: 1 }))).status).toBe(204);
+    expect(await (await fetch(new URL("/api/sessions", server.url))).json())
+      .toEqual({ sessions: [{ ...created, lastPage: 12 }] });
+    expect((await put(JSON.stringify({ page: 9, writer: "tab-2", sequence: 1 }))).status).toBe(204);
+    const unordered = await put(JSON.stringify({ page: 9, writer: "tab-2" }));
+    expect(unordered.status).toBe(400);
+
     const invalid = await put(JSON.stringify({ page: 0 }));
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({

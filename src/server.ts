@@ -426,7 +426,8 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
         const progress = await readJsonPayload(request, "reading position", parseSessionProgress);
         if (progress instanceof Response) return progress;
         try {
-          await sessionStore.saveProgress(decodeURIComponent(sessionProgressMatch[1] ?? ""), progress.page);
+          const sessionId = decodeURIComponent(sessionProgressMatch[1] ?? "");
+          await sessionStore.saveProgress(sessionId, progress.page, progress.order);
           return new Response(null, { status: 204 });
         } catch (error) {
           if (error instanceof SessionNotFoundError || error instanceof URIError) {

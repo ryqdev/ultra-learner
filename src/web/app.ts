@@ -63,6 +63,10 @@ let toastTimer: number | undefined;
 let progressTimer: number | undefined;
 // The newest reading-position write, so history is not re-read while it is still in flight.
 let progressSave: Promise<void> = Promise.resolve();
+// Position writes are not awaited, so they are numbered for the server to apply in order.
+// Not crypto.randomUUID: it is unavailable when the reader is opened through a plain-HTTP host name.
+const progressWriter = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+let progressSequence = 0;
 let chatResizePointerId: number | null = null;
 let chatResizeStart: { pointerX: number; panelWidth: number } | null = null;
 let sessions: SessionSummary[] = [];
@@ -170,7 +174,11 @@ function saveProgressNow(): void {
   if (!session || !reader.documentLoaded || (session.lastPage ?? 1) === reader.page) return;
   session.lastPage = reader.page;
   // The position is a convenience; a failed save must never interrupt reading.
-  progressSave = saveSessionProgress(session.id, reader.page).catch(() => undefined);
+  progressSequence += 1;
+  progressSave = saveSessionProgress(session.id, {
+    page: reader.page,
+    order: { writer: progressWriter, sequence: progressSequence },
+  }).catch(() => undefined);
 }
 
 /** Wait for page turns to settle so paging quickly through a document writes once. */
@@ -366,6 +374,8 @@ async function openUploadedFile(file: File): Promise<void> {
   if (!await reader.openFile(file)) return;
 
   try {
+    // If this file is already in history, its position must be on disk before the server reports it.
+    await progressSave;
     const session = await saveSession(file);
     // The server answers with the stored session when this exact PDF is already in history.
     const alreadyStored = sessions.some((candidate) => candidate.id === session.id);

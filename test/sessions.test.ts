@@ -58,4 +58,22 @@ describe("session metadata helpers", () => {
       expect(() => parseSessionProgress(body)).toThrow("reading position");
     }
   });
+
+  test("accepts a numbered position update only when its writer and sequence are both usable", () => {
+    expect(parseSessionProgress({ page: 7, writer: "mabc12-x9", sequence: 4 }))
+      .toEqual({ page: 7, order: { writer: "mabc12-x9", sequence: 4 } });
+    for (const order of [
+      { writer: "tab" },
+      { sequence: 4 },
+      { writer: "", sequence: 4 },
+      { writer: "has space", sequence: 4 },
+      { writer: "x".repeat(65), sequence: 4 },
+      { writer: "tab", sequence: -1 },
+      { writer: "tab", sequence: 1.5 },
+      { writer: "tab", sequence: "4" },
+      { writer: 7, sequence: 4 },
+    ]) {
+      expect(() => parseSessionProgress({ page: 7, ...order })).toThrow("writer and sequence");
+    }
+  });
 });

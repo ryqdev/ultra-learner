@@ -1,5 +1,5 @@
 import { formatFileSize } from "../lib/files.ts";
-import { parseSessionSummary, type SessionSummary } from "../lib/sessions.ts";
+import { parseSessionSummary, type SessionProgress, type SessionSummary } from "../lib/sessions.ts";
 
 interface SessionListResponse {
   sessions?: unknown;
@@ -81,16 +81,19 @@ export async function deleteSession(
     : "Unable to delete this PDF session.");
 }
 
-/** Record the page a learner has reached. The request may outlive the page that sent it. */
+/**
+ * Record the page a learner has reached. The request may outlive the page that
+ * sent it, and `order` lets the server discard one that arrives after a newer one.
+ */
 export async function saveSessionProgress(
   sessionId: string,
-  page: number,
+  { page, order }: SessionProgress,
   fetcher: SessionFetch = fetch,
 ): Promise<void> {
   const response = await fetcher(`/api/sessions/${encodeURIComponent(sessionId)}/progress`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ page }),
+    body: JSON.stringify({ page, ...order }),
     keepalive: true,
   });
   if (response.ok) return;
