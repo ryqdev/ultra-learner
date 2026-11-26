@@ -15,7 +15,9 @@ bunx @ryqdev/ultra-learner
 ```
 
 Open the printed URL in your browser. Use `--port 4100` to choose a port,
-`--help` for usage, or `--version` to check the installed version. The package
+`--help` for usage, or `--version` to check the installed version. The server
+only answers requests addressed to `127.0.0.1`, `localhost`, or `[::1]`; pass
+`--allow-host <host>` when a forwarding proxy presents another host name. The package
 requires Bun at runtime. Use `bunx @ryqdev/ultra-learner@latest` to request the
 latest release, or specify a version to reproduce an older release.
 

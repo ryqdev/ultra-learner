@@ -20,6 +20,8 @@ import { SessionNotFoundError, SessionStore, type SessionStoreOptions } from "./
 export interface AppServerOptions {
   port?: number;
   hostname?: string;
+  /** Extra names clients may address the server by, for a deliberate non-loopback deployment. */
+  allowedHosts?: readonly string[];
   development?: boolean;
   root?: string;
   sessionStore?: SessionStore;
@@ -364,6 +366,38 @@ export function resolveContainedPath(root: string, pathname: string, pathApi: Pa
   return offset && !escapes ? candidate : undefined;
 }
 
+const LOOPBACK_HOSTNAMES = ["127.0.0.1", "localhost", "[::1]"];
+const WILDCARD_HOSTNAMES = new Set(["0.0.0.0", "[::]"]);
+
+function urlHostname(host: string): string | null {
+  try {
+    return new URL(`http://${host}`).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Collect the names this server answers to. A page on another domain can rebind
+ * its DNS name to 127.0.0.1 and become same-origin with the session API, so the
+ * request Host must be one the user could have typed for this server.
+ */
+function allowedHostnames(options: AppServerOptions): Set<string> {
+  const allowed = new Set<string>();
+  for (const name of [...LOOPBACK_HOSTNAMES, options.hostname ?? "", ...(options.allowedHosts ?? [])]) {
+    // A bare IPv6 address needs brackets before it can be read as a URL host.
+    const hostname = urlHostname(name.includes(":") && !name.startsWith("[") ? `[${name}]` : name);
+    if (hostname && !WILDCARD_HOSTNAMES.has(hostname)) allowed.add(hostname);
+  }
+  return allowed;
+}
+
+function hasAllowedHost(request: Request, allowed: ReadonlySet<string>): boolean {
+  const host = request.headers.get("host");
+  const hostname = host ? urlHostname(host) : null;
+  return hostname !== null && allowed.has(hostname);
+}
+
 function responseForFile(path: string): Response {
   return new Response(Bun.file(path), {
     headers: {
@@ -389,12 +423,16 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
   const pdfRoot = dirname(Bun.resolveSync("pdfjs-dist/package.json", import.meta.dir));
   const sessionStore = options.sessionStore ?? new SessionStore({ root: options.sessionRoot });
   const chatFetcher = options.chatFetcher ?? fetch;
+  const allowedHosts = allowedHostnames(options);
 
   return Bun.serve({
     port: options.port ?? Number(Bun.env.PORT ?? 8881),
     hostname: options.hostname ?? "127.0.0.1",
     development: options.development ?? Bun.env.NODE_ENV !== "production",
     async fetch(request) {
+      if (!hasAllowedHost(request, allowedHosts)) {
+        return new Response("This server only answers requests addressed to its local address.", { status: 403 });
+      }
       const url = new URL(request.url);
 
       if (url.pathname === "/health") {

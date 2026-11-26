@@ -313,6 +313,32 @@ describe("web server", () => {
     }
   });
 
+  test("answers only requests addressed to a local or explicitly allowed host", async () => {
+    server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
+    const sessions = new URL("/api/sessions", server.url);
+
+    // A rebound DNS name reaches the loopback socket but still names the attacker's host.
+    const rebound = await fetch(sessions, { headers: { Host: `attacker.example:${server.port}` } });
+    expect(rebound.status).toBe(403);
+    expect(await rebound.text()).not.toContain("sessions");
+    expect((await fetch(new URL("/", server.url), { headers: { Host: "attacker.example" } })).status).toBe(403);
+
+    for (const host of [`127.0.0.1:${server.port}`, `localhost:${server.port}`, `LOCALHOST:${server.port}`, `[::1]:${server.port}`]) {
+      expect((await fetch(sessions, { headers: { Host: host } })).status).toBe(200);
+    }
+
+    server.stop(true);
+    server = createAppServer({
+      port: 0,
+      development: false,
+      sessionRoot: await sessionRoot(),
+      allowedHosts: ["reader.internal"],
+    });
+    const allowed = await fetch(new URL("/health", server.url), { headers: { Host: `reader.internal:${server.port}` } });
+    expect(allowed.status).toBe(200);
+    expect((await fetch(new URL("/health", server.url), { headers: { Host: "other.internal" } })).status).toBe(403);
+  });
+
   test("serves PDF worker resources with browser-safe content types", async () => {
     server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
 
