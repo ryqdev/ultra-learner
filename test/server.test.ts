@@ -6,7 +6,7 @@ import { join } from "node:path";
 import path from "node:path";
 
 import { createAppServer, resolveContainedPath } from "../src/server.ts";
-import { CHAT_MODELS_PATH, CHAT_PROXY_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
+import { CHAT_MODELS_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -126,10 +126,6 @@ describe("web server", () => {
     const postResponse = await fetch(server.url, { method: "POST" });
     expect(postResponse.status).toBe(405);
 
-    const chatGetResponse = await fetch(new URL(CHAT_PROXY_PATH, server.url));
-    expect(chatGetResponse.status).toBe(405);
-    expect(chatGetResponse.headers.get("allow")).toBe("POST");
-
     const chatTestGetResponse = await fetch(new URL(CHAT_TEST_PATH, server.url));
     expect(chatTestGetResponse.status).toBe(405);
     expect(chatTestGetResponse.headers.get("allow")).toBe("POST");
@@ -180,48 +176,6 @@ describe("web server", () => {
     }
   });
 
-  test("forwards chat requests through the same-origin proxy", async () => {
-    let upstreamUrl = "";
-    let upstreamInit: RequestInit | undefined;
-    server = createAppServer({
-      port: 0,
-      development: false,
-      sessionRoot: await sessionRoot(),
-      chatFetcher: async (input, init) => {
-        upstreamUrl = String(input);
-        upstreamInit = init;
-        return Response.json({ choices: [{ message: { content: "hello from provider" } }] });
-      },
-    });
-
-    const response = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer tab-secret",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        baseUrl: "https://provider.example/v1",
-        model: "study-model",
-        messages: [{ role: "user", content: "hello" }],
-      }),
-    });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ choices: [{ message: { content: "hello from provider" } }] });
-    expect(upstreamUrl).toBe("https://provider.example/v1/chat/completions");
-    expect(upstreamInit?.headers).toEqual({
-      Accept: "application/json",
-      Authorization: "Bearer tab-secret",
-      "Content-Type": "application/json",
-    });
-    expect(String(upstreamInit?.body)).not.toContain("tab-secret");
-    expect(JSON.parse(String(upstreamInit?.body))).toEqual({
-      model: "study-model",
-      messages: [{ role: "user", content: "hello" }],
-      stream: false,
-    });
-  });
-
   test("tests provider settings with a minimal completion through the proxy", async () => {
     let upstreamUrl = "";
     let upstreamInit: RequestInit | undefined;
@@ -244,6 +198,11 @@ describe("web server", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ choices: [{ message: { content: "OK" } }] });
     expect(upstreamUrl).toBe("https://provider.example/v1/chat/completions");
+    expect(upstreamInit?.headers).toEqual({
+      Accept: "application/json",
+      Authorization: "Bearer tab-secret",
+      "Content-Type": "application/json",
+    });
     expect(JSON.parse(String(upstreamInit?.body))).toEqual({
       model: "study-model",
       messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
@@ -324,22 +283,43 @@ describe("web server", () => {
       chatFetcher: async () => { throw new Error("secret provider path"); },
     });
 
-    const missingKey = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
+    const missingKey = await fetch(new URL(CHAT_MODELS_PATH, server.url), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "m", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1" }),
     });
     expect(missingKey.status).toBe(401);
 
-    const upstreamFailure = await fetch(new URL(CHAT_PROXY_PATH, server.url), {
+    const invalidTarget = await fetch(new URL(CHAT_TEST_PATH, server.url), {
       method: "POST",
       headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
-      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "m", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ baseUrl: "file:///etc/passwd", model: "m" }),
     });
-    expect(upstreamFailure.status).toBe(502);
-    expect(await upstreamFailure.json()).toEqual({
-      error: { message: "Unable to reach the model provider. Check the Base URL and that the provider is running." },
+    expect(invalidTarget.status).toBe(400);
+    expect(await invalidTarget.json()).toEqual({ error: { message: "Base URL must use HTTP or HTTPS." } });
+
+    for (const [path, body] of [
+      [CHAT_TEST_PATH, { baseUrl: "https://provider.example/v1", model: "m" }],
+      [CHAT_MODELS_PATH, { baseUrl: "https://provider.example/v1" }],
+    ] as const) {
+      const upstreamFailure = await fetch(new URL(path, server.url), {
+        method: "POST",
+        headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(upstreamFailure.status).toBe(502);
+      expect(await upstreamFailure.json()).toEqual({
+        error: { message: "Unable to reach the model provider. Check the Base URL and that the provider is running." },
+      });
+    }
+
+    // The conversation route is gone: nothing in the reader sends a prompt.
+    const removedRoute = await fetch(new URL("/api/chat/completions", server.url), {
+      method: "POST",
+      headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://provider.example/v1", model: "m", messages: [] }),
     });
+    expect(removedRoute.status).toBe(405);
   });
 
   test("does not expose files outside the public directory", async () => {

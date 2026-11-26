@@ -12,7 +12,7 @@ Chat requests use a same-origin `POST /api/chat/completions` endpoint by default
 
 The workspace sidebar exposes `New chat`. It clears the in-memory chat messages, current selection, and active request while retaining the currently rendered PDF and provider configuration. This is a conversation boundary and does not create another persisted PDF session. The original reader-toolbar entry point was later removed by the [reader AI entry-point consolidation](2026-08-27-reader-ai-entry-point.md).
 
-The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) removes the conversation UI and New chat action while retaining the proxy groundwork for future use.
+The later [model-configuration-only guide decision](2026-08-31-model-configuration-only-guide.md) removes the conversation UI and New chat action while retaining the proxy groundwork for future use, and the [removal of the unreachable chat groundwork](2026-11-26-remove-unreachable-chat-groundwork.md) then deletes the completions route itself.
 
 ## Alternatives considered
 

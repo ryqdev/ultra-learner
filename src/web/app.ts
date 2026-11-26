@@ -138,7 +138,6 @@ const reader = new PdfReaderController(
     canvas: requiredElement<HTMLCanvasElement>("pdf-canvas"),
     textLayer: requiredElement<HTMLDivElement>("text-layer"),
     annotationLayer: requiredElement<HTMLDivElement>("annotation-layer"),
-    boxSelection: requiredElement("box-selection"),
     thumbnailList: requiredElement("thumbnail-list"),
     documentTitle: requiredElement("document-title"),
     pageInput: requiredElement<HTMLInputElement>("page-input"),

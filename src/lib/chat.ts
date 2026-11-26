@@ -1,10 +1,3 @@
-export type ChatRole = "system" | "user" | "assistant";
-
-export interface ChatMessage {
-  role: ChatRole;
-  content: string;
-}
-
 export interface ChatConfig {
   apiKey: string;
   baseUrl: string;
@@ -28,19 +21,6 @@ export const KNOWN_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "hig
 const KNOWN_REASONING_EFFORT_SET = new Set<string>(KNOWN_REASONING_EFFORTS);
 
 export type ChatFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-export type ChatTransport = "proxy" | "direct";
-
-export interface ChatRequestOptions {
-  /** Select the browser transport explicitly; the same-origin proxy is the default. */
-  transport?: ChatTransport;
-}
-
-export interface ChatProxyPayload {
-  baseUrl: string;
-  model: string;
-  messages: ChatMessage[];
-  reasoningEffort?: string;
-}
 
 export interface ChatTestPayload {
   baseUrl: string;
@@ -52,14 +32,11 @@ export interface ChatModelsPayload {
   baseUrl: string;
 }
 
-export const CHAT_PROXY_PATH = "/api/chat/completions";
 export const CHAT_TEST_PATH = "/api/chat/test";
 export const CHAT_MODELS_PATH = "/api/chat/models";
 export const CHAT_TEST_MESSAGE = "Reply with OK in one short sentence.";
 export const MAXIMUM_CHAT_REQUEST_SIZE = 1_000_000;
 export const MAXIMUM_CHAT_MODELS = 500;
-const MAXIMUM_CHAT_MESSAGES = 100;
-const MAXIMUM_CHAT_MESSAGE_LENGTH = 200_000;
 
 export const DEFAULT_CHAT_CONFIG: Omit<ChatConfig, "apiKey"> = {
   baseUrl: "https://api.openai.com/v1",
@@ -123,60 +100,6 @@ export function validateChatConfig(config: ChatConfig): ChatConfig {
   };
 }
 
-/** Validate the conversation before it crosses either the browser or proxy boundary. */
-export function validateChatMessages(messages: ChatMessage[]): ChatMessage[] {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    throw new TypeError("At least one chat message is required.");
-  }
-  if (messages.length > MAXIMUM_CHAT_MESSAGES) {
-    throw new TypeError("The chat conversation is too long.");
-  }
-
-  let totalLength = 0;
-  const normalizedMessages: ChatMessage[] = [];
-  for (const message of messages) {
-    if (!message || !["system", "user", "assistant"].includes(message.role)) {
-      throw new TypeError("The chat message role is invalid.");
-    }
-    if (typeof message.content !== "string" || !message.content.trim()) {
-      throw new TypeError("The chat message cannot be empty.");
-    }
-    if (message.content.length > MAXIMUM_CHAT_MESSAGE_LENGTH) {
-      throw new TypeError("A chat message is too long.");
-    }
-    totalLength += message.content.length;
-    if (totalLength > MAXIMUM_CHAT_REQUEST_SIZE) {
-      throw new TypeError("The chat request is too large.");
-    }
-    normalizedMessages.push({ role: message.role, content: message.content });
-  }
-  return normalizedMessages;
-}
-
-/** Parse the untrusted body accepted by the same-origin chat proxy. */
-export function parseChatProxyPayload(value: unknown): ChatProxyPayload {
-  if (!value || typeof value !== "object") throw new TypeError("The chat request is invalid.");
-  const candidate = value as Partial<ChatProxyPayload>;
-  if (typeof candidate.baseUrl !== "string" || typeof candidate.model !== "string") {
-    throw new TypeError("The chat provider settings are invalid.");
-  }
-  const baseUrl = normalizeBaseUrl(candidate.baseUrl);
-  const model = candidate.model.trim();
-  if (!model) throw new TypeError("Model is required.");
-  const rawReasoningEffort = candidate.reasoningEffort
-    ?? (candidate as Partial<ChatProxyPayload> & { reasoning_effort?: unknown }).reasoning_effort;
-  const reasoningEffort = recognizedReasoningEffort(rawReasoningEffort);
-  if (rawReasoningEffort && !reasoningEffort) throw new TypeError("Reasoning intensity is not supported.");
-  if (!Array.isArray(candidate.messages)) throw new TypeError("The chat messages are invalid.");
-  const messages = validateChatMessages(candidate.messages as ChatMessage[]);
-  return {
-    baseUrl,
-    model,
-    messages,
-    ...(reasoningEffort ? { reasoningEffort } : {}),
-  };
-}
-
 /** Parse the smaller payload accepted by the provider connection test. */
 export function parseChatTestPayload(value: unknown): ChatTestPayload {
   if (!value || typeof value !== "object") throw new TypeError("The chat test request is invalid.");
@@ -229,52 +152,6 @@ export function chatModelsUrl(baseUrl: string): string {
   }
   url.pathname = `${pathname || ""}/models`;
   return url.toString().replace(/\/$/, "");
-}
-
-function completionBody(config: ChatConfig, messages: ChatMessage[]): string {
-  const valid = validateChatConfig(config);
-  const validMessages = validateChatMessages(messages);
-  const body: {
-    model: string;
-    messages: ChatMessage[];
-    stream: false;
-    reasoning_effort?: string;
-  } = { model: valid.model, messages: validMessages, stream: false };
-  if (valid.reasoningEffort) body.reasoning_effort = valid.reasoningEffort;
-  return JSON.stringify(body);
-}
-
-export function createChatRequest(config: ChatConfig, messages: ChatMessage[]): RequestInit & { url: string } {
-  const valid = validateChatConfig(config);
-  return {
-    url: chatCompletionsUrl(valid.baseUrl),
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${valid.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: completionBody(valid, messages),
-  };
-}
-
-/** Build the browser request for the same-origin proxy. The key is sent only in a header. */
-export function createChatProxyRequest(config: ChatConfig, messages: ChatMessage[]): RequestInit & { url: string } {
-  const valid = validateChatConfig(config);
-  const body: ChatProxyPayload = {
-    baseUrl: valid.baseUrl,
-    model: valid.model,
-    messages: validateChatMessages(messages),
-    ...(valid.reasoningEffort ? { reasoningEffort: valid.reasoningEffort } : {}),
-  };
-  return {
-    url: CHAT_PROXY_PATH,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${valid.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  };
 }
 
 /** Build the browser request for the lightweight same-origin connection test. */
@@ -532,22 +409,8 @@ function isAbortError(error: unknown): boolean {
 }
 
 function networkErrorMessage(url: string): string {
-  if (url === CHAT_PROXY_PATH) {
-    return "Could not reach the local chat proxy. Restart Ultra Learner and try again.";
-  }
-  if (url === CHAT_TEST_PATH) {
-    return "Could not reach the local connection test. Restart Ultra Learner and try again.";
-  }
-  if (url === CHAT_MODELS_PATH) {
-    return "Could not reach the local model discovery service. Restart Ultra Learner and try again.";
-  }
-  let host = url;
-  try {
-    host = new URL(url).host;
-  } catch {
-    // The URL was already validated, but keep the fallback safe for custom fetchers.
-  }
-  return `Could not connect to ${host}. Check the Base URL, network connection, and provider availability. A direct browser request may also be blocked by CORS.`;
+  const service = url === CHAT_MODELS_PATH ? "model discovery service" : "connection test";
+  return `Could not reach the local ${service}. Restart Ultra Learner and try again.`;
 }
 
 async function responsePayload(response: Response): Promise<ChatCompletionResponse> {
@@ -586,40 +449,16 @@ async function requestCompletionResponse(
   return payload;
 }
 
-export async function requestChatCompletion(
-  config: ChatConfig,
-  messages: ChatMessage[],
-  signal?: AbortSignal,
-  fetcher: ChatFetcher = fetch,
-  options: ChatRequestOptions = {},
-): Promise<string> {
-  // Keep provider calls same-origin by default. Direct browser requests are
-  // retained only as an explicit compatibility option because most gateways
-  // do not grant CORS access to a local reader origin.
-  const request = options.transport === "direct"
-    ? createChatRequest(config, messages)
-    : createChatProxyRequest(config, messages);
-  const payload = await requestCompletionResponse(request, signal, fetcher);
-  const text = completionText(payload);
-  if (!text) throw new Error("The model returned an empty response.");
-  return text;
-}
-
 /**
- * Send a minimal completion without adding anything to the current chat.
- * The proxy keeps the provider URL and key on the same local boundary as
- * normal chat requests, while the direct transport remains opt-in.
+ * Ask the provider for one minimal completion through the same-origin test
+ * route, which keeps the provider URL and key on the local boundary.
  */
 export async function testChatConnection(
   config: ChatConfig,
   signal?: AbortSignal,
   fetcher: ChatFetcher = fetch,
-  options: ChatRequestOptions = {},
 ): Promise<string> {
-  const request = options.transport === "direct"
-    ? createChatRequest(config, [{ role: "user", content: CHAT_TEST_MESSAGE }])
-    : createChatTestRequest(config);
-  const payload = await requestCompletionResponse(request, signal, fetcher);
+  const payload = await requestCompletionResponse(createChatTestRequest(config), signal, fetcher);
   const text = completionText(payload);
   if (!text) throw new Error("The provider returned an invalid completion response.");
   return text;

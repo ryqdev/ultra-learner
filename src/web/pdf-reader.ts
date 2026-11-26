@@ -28,7 +28,6 @@ import {
   vimScrollProgress,
   zoomLabel,
 } from "../lib/reader.ts";
-import { createSelectionContext, type SelectionContext, type SelectionSource } from "../lib/selection.ts";
 import { ReaderPdfDownloadManager } from "./pdf-download-manager.ts";
 import { ReaderPdfLinkService } from "./pdf-link-service.ts";
 
@@ -51,7 +50,6 @@ export interface PdfReaderElements {
   canvas: HTMLCanvasElement;
   textLayer: HTMLDivElement;
   annotationLayer: HTMLDivElement;
-  boxSelection: HTMLElement;
   thumbnailList: HTMLElement;
   documentTitle: HTMLElement;
   pageInput: HTMLInputElement;
@@ -68,7 +66,6 @@ export interface PdfReaderElements {
 
 export interface PdfReaderCallbacks {
   onFileAccepted: () => void;
-  onSelection?: (selection: SelectionContext | null) => void;
   onToast: (message: string) => void;
 }
 
@@ -85,7 +82,6 @@ interface ReaderState {
   annotationCanvasMap: Map<string, HTMLCanvasElement> | null;
   optionalContentConfigPromise: ReturnType<PDFDocumentProxy["getOptionalContentConfig"]> | null;
   renderVersion: number;
-  selectionMode: SelectionSource;
 }
 
 interface PdfDestinationKind {
@@ -99,10 +95,6 @@ interface PdfDestinationLocation {
 
 function isRenderingCancelled(error: unknown): boolean {
   return error instanceof Error && error.name === "RenderingCancelledException";
-}
-
-function rectanglesIntersect(a: DOMRect, b: DOMRect): boolean {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
 export class PdfReaderController {
@@ -119,12 +111,10 @@ export class PdfReaderController {
     annotationCanvasMap: null,
     optionalContentConfigPromise: null,
     renderVersion: 0,
-    selectionMode: "text",
   };
 
   private resizeTimer: number | undefined;
   private pageLoadingTimer: number | undefined;
-  private boxStart: { x: number; y: number } | null = null;
   private openFileVersion = 0;
   private mainPageRendering = false;
   // The page whose canvas is on screen, so a redraw can be told apart from a page turn.
@@ -169,11 +159,6 @@ export class PdfReaderController {
     this.state.page = 1;
     this.state.zoom = 1;
     this.state.fitScale = 1;
-    this.state.selectionMode = "text";
-    this.elements.pageSurface.classList.remove("is-box-selecting");
-    this.elements.textLayer.classList.remove("is-box-selecting");
-    this.elements.annotationLayer.classList.remove("is-box-selecting");
-    this.elements.textLayer.setAttribute("aria-label", "Select PDF text");
     this.elements.thumbnailList.replaceChildren();
     this.elements.canvas.width = 0;
     this.elements.canvas.height = 0;
@@ -310,15 +295,6 @@ export class PdfReaderController {
     void this.goToPage(this.state.page + vimPageDelta(key));
   }
 
-  public setSelectionMode(mode: SelectionSource): void {
-    this.state.selectionMode = mode;
-    this.elements.pageSurface.classList.toggle("is-box-selecting", mode === "box");
-    this.elements.textLayer.classList.toggle("is-box-selecting", mode === "box");
-    this.elements.annotationLayer.classList.toggle("is-box-selecting", mode === "box");
-    this.elements.textLayer.setAttribute("aria-label", mode === "box" ? "Draw a box around PDF text" : "Select PDF text");
-    if (mode === "box") this.clearSelection();
-  }
-
   public toggleSidebar(): void {
     this.elements.readerView.classList.toggle("sidebar-hidden");
   }
@@ -385,16 +361,6 @@ export class PdfReaderController {
       const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("[data-page]") : null;
       if (target) void this.goToPage(Number(target.dataset.page));
     });
-    this.elements.pageSurface.addEventListener("mouseup", () => {
-      window.setTimeout(() => this.publishNativeSelection(), 0);
-    });
-    document.addEventListener("selectionchange", () => {
-      if (this.state.selectionMode === "text") this.publishNativeSelection();
-    });
-    elements.pageSurface.addEventListener("pointerdown", (event) => this.beginBoxSelection(event));
-    elements.pageSurface.addEventListener("pointermove", (event) => this.updateBoxSelection(event));
-    elements.pageSurface.addEventListener("pointerup", (event) => this.finishBoxSelection(event));
-    elements.pageSurface.addEventListener("pointercancel", () => this.cancelBoxSelection());
     window.addEventListener("resize", () => {
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => {
@@ -403,91 +369,9 @@ export class PdfReaderController {
     });
   }
 
-  private beginBoxSelection(event: PointerEvent): void {
-    if (this.state.selectionMode !== "box" || event.button !== 0 || !this.state.document) return;
-    event.preventDefault();
-    this.boxStart = this.surfacePoint(event);
-    this.elements.pageSurface.setPointerCapture(event.pointerId);
-    this.elements.boxSelection.hidden = false;
-    this.elements.boxSelection.style.left = `${this.boxStart.x}px`;
-    this.elements.boxSelection.style.top = `${this.boxStart.y}px`;
-    this.elements.boxSelection.style.width = "0px";
-    this.elements.boxSelection.style.height = "0px";
-  }
-
-  private updateBoxSelection(event: PointerEvent): void {
-    if (!this.boxStart) return;
-    event.preventDefault();
-    const point = this.surfacePoint(event);
-    const left = Math.min(point.x, this.boxStart.x);
-    const top = Math.min(point.y, this.boxStart.y);
-    this.elements.boxSelection.style.left = `${left}px`;
-    this.elements.boxSelection.style.top = `${top}px`;
-    this.elements.boxSelection.style.width = `${Math.abs(point.x - this.boxStart.x)}px`;
-    this.elements.boxSelection.style.height = `${Math.abs(point.y - this.boxStart.y)}px`;
-  }
-
-  private finishBoxSelection(event: PointerEvent): void {
-    if (!this.boxStart) return;
-    event.preventDefault();
-    const start = this.boxStart;
-    const point = this.surfacePoint(event);
-    this.boxStart = null;
-    if (this.elements.pageSurface.hasPointerCapture(event.pointerId)) this.elements.pageSurface.releasePointerCapture(event.pointerId);
-    this.elements.boxSelection.hidden = true;
-
-    const left = Math.min(point.x, start.x);
-    const top = Math.min(point.y, start.y);
-    const selectionRect = new DOMRect(
-      this.elements.pageSurface.getBoundingClientRect().left + left,
-      this.elements.pageSurface.getBoundingClientRect().top + top,
-      Math.abs(point.x - start.x),
-      Math.abs(point.y - start.y),
-    );
-    const text = Array.from(this.elements.textLayer.querySelectorAll<HTMLElement>("span"))
-      .filter((span) => !span.classList.contains("markedContent") && !span.querySelector("span"))
-      .filter((span) => rectanglesIntersect(span.getBoundingClientRect(), selectionRect))
-      .map((span) => span.textContent ?? "")
-      .join(" ");
-    const selection = createSelectionContext(text, this.state.page, "box");
-    if (!selection) {
-      this.callbacks.onToast("Draw around text on the page to share it with the chat.");
-      return;
-    }
-    this.publishSelection(selection);
-  }
-
-  private cancelBoxSelection(): void {
-    this.boxStart = null;
-    this.elements.boxSelection.hidden = true;
-  }
-
-  private surfacePoint(event: PointerEvent): { x: number; y: number } {
-    const bounds = this.elements.pageSurface.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
-      y: Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)),
-    };
-  }
-
-  private publishNativeSelection(): void {
-    if (this.state.selectionMode !== "text") return;
-    const browserSelection = window.getSelection();
-    if (!browserSelection || browserSelection.isCollapsed || !browserSelection.rangeCount) return;
-    const range = browserSelection.getRangeAt(0);
-    if (!this.elements.textLayer.contains(range.commonAncestorContainer)) return;
-    const selection = createSelectionContext(browserSelection.toString(), this.state.page, "text");
-    if (selection) this.publishSelection(selection);
-  }
-
-  private publishSelection(selection: SelectionContext): void {
-    this.callbacks.onSelection?.(selection);
-  }
-
+  /** Drop a text selection that belongs to a page or document no longer shown. */
   private clearSelection(): void {
     window.getSelection()?.removeAllRanges();
-    this.elements.boxSelection.hidden = true;
-    this.callbacks.onSelection?.(null);
   }
 
   private animateVimScroll(key: VimScrollKey): void {
@@ -559,7 +443,6 @@ export class PdfReaderController {
     this.elements.textLayer.replaceChildren();
     this.elements.annotationLayer.replaceChildren();
     this.state.renderVersion += 1;
-    this.callbacks.onSelection?.(null);
   }
 
   private setLoading(message: string): void {
@@ -731,11 +614,7 @@ export class PdfReaderController {
       textLayer.div.style.width = `${width}px`;
       textLayer.div.style.height = `${height}px`;
       textLayer.div.style.setProperty("--total-scale-factor", String(scale));
-      textLayer.div.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
-      textLayer.div.setAttribute(
-        "aria-label",
-        this.state.selectionMode === "box" ? "Draw a box around PDF text" : "Select PDF text",
-      );
+      textLayer.div.setAttribute("aria-label", "Select PDF text");
       const textLayerPromise = textLayer.render({ viewport, images: undefined as never });
       const annotationsPromise = page.getAnnotations({ intent: "display" });
       await Promise.all([renderTask.promise, textLayerPromise]);
@@ -750,7 +629,6 @@ export class PdfReaderController {
       const annotationLayerElement = document.createElement("div");
       annotationLayerElement.id = "annotation-layer";
       annotationLayerElement.className = "annotationLayer";
-      annotationLayerElement.classList.toggle("is-box-selecting", this.state.selectionMode === "box");
       annotationLayerElement.setAttribute("aria-label", "PDF links and annotations");
       annotationLayer = new AnnotationLayer({
         div: annotationLayerElement,

@@ -2,18 +2,15 @@ import { statSync } from "node:fs";
 import path, { dirname, extname, join } from "node:path";
 
 import {
-  CHAT_PROXY_PATH,
   CHAT_MODELS_PATH,
   CHAT_TEST_MESSAGE,
   CHAT_TEST_PATH,
   chatCompletionsUrl,
   chatModelsUrl,
   MAXIMUM_CHAT_REQUEST_SIZE,
-  parseChatProxyPayload,
   parseChatModelsPayload,
   parseChatTestPayload,
   type ChatFetcher,
-  type ChatMessage,
 } from "./lib/chat.ts";
 import { MAXIMUM_PDF_FILE_SIZE } from "./lib/files.ts";
 import {
@@ -192,29 +189,6 @@ async function forwardToProvider(fetcher: ChatFetcher, request: ProviderRequest)
   }
 }
 
-function completionBody(model: string, messages: ChatMessage[], reasoningEffort?: string): unknown {
-  return {
-    model,
-    messages,
-    stream: false,
-    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
-  };
-}
-
-async function proxyChatCompletion(request: Request, fetcher: ChatFetcher): Promise<Response> {
-  const authorization = bearerToken(request);
-  if (!authorization) return jsonError("An API key is required.", 401);
-  const payload = await readJsonPayload(request, "chat request", parseChatProxyPayload);
-  if (payload instanceof Response) return payload;
-  return forwardToProvider(fetcher, {
-    url: chatCompletionsUrl(payload.baseUrl),
-    authorization,
-    body: completionBody(payload.model, payload.messages, payload.reasoningEffort),
-    maximumResponseSize: MAXIMUM_CHAT_RESPONSE_SIZE,
-    tooLargeMessage: "The model response is too large.",
-  });
-}
-
 async function testChatProvider(request: Request, fetcher: ChatFetcher): Promise<Response> {
   const authorization = bearerToken(request);
   if (!authorization) return jsonError("An API key is required.", 401);
@@ -223,7 +197,12 @@ async function testChatProvider(request: Request, fetcher: ChatFetcher): Promise
   return forwardToProvider(fetcher, {
     url: chatCompletionsUrl(payload.baseUrl),
     authorization,
-    body: completionBody(payload.model, [{ role: "user", content: CHAT_TEST_MESSAGE }], payload.reasoningEffort),
+    body: {
+      model: payload.model,
+      messages: [{ role: "user", content: CHAT_TEST_MESSAGE }],
+      stream: false,
+      ...(payload.reasoningEffort ? { reasoning_effort: payload.reasoningEffort } : {}),
+    },
     maximumResponseSize: MAXIMUM_CHAT_RESPONSE_SIZE,
     tooLargeMessage: "The model response is too large.",
   });
@@ -367,11 +346,6 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       if (url.pathname === "/health") {
         if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
         return Response.json({ status: "ok" });
-      }
-
-      if (url.pathname === CHAT_PROXY_PATH) {
-        if (request.method !== "POST") return methodNotAllowed("POST");
-        return proxyChatCompletion(request, chatFetcher);
       }
 
       if (url.pathname === CHAT_TEST_PATH) {

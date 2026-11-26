@@ -77,7 +77,7 @@ src/index.ts        Application entry point.
 src/server.ts       Bun HTTP server, session API, and browser bundle endpoint.
 src/session-store.ts Local PDF session persistence.
 src/web/            Reader, history, and model-configuration UI.
-src/lib/            Deterministic file, session, reader, selection, chat transport, and provider-profile helpers.
+src/lib/            Deterministic file, session, reader, model-request, and provider-profile helpers.
 test/               Behavior and HTTP boundary tests.
 docs/               Stable architecture guidance.
 .agents/            Project decisions and reusable agent workflows.
