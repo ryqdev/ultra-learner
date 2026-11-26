@@ -95,7 +95,9 @@ Bun does not currently exchange npm OIDC credentials itself. The small
 [publishing adapter](../scripts/publish-npm.ts) requests a GitHub OIDC identity and
 uses npm's documented token-exchange API, then passes the package-scoped,
 short-lived credential directly to `bun publish`. Only this job receives
-`id-token: write`; no persistent `NPM_TOKEN` secret is needed. This Bun publication
+`id-token: write`; no persistent `NPM_TOKEN` secret is needed. Because that
+permission can publish the package, every action in the workflows is pinned to a
+full commit SHA with its release in a trailing comment; update both together. This Bun publication
 path does not generate a provenance attestation.
 
 ## Retry and recovery

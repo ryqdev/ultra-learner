@@ -2,21 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CHAT_MODELS_PATH,
-  CHAT_PROXY_PATH,
   CHAT_TEST_MESSAGE,
   CHAT_TEST_PATH,
   chatCompletionsUrl,
   chatModelsUrl,
   createChatModelsRequest,
   createChatTestRequest,
-  createChatProxyRequest,
-  createChatRequest,
   fetchChatModels,
   normalizeBaseUrl,
   parseChatModelsResponse,
-  parseChatProxyPayload,
   parseChatTestPayload,
-  requestChatCompletion,
+  selectCatalogModel,
   testChatConnection,
   validateChatConfig,
   validateChatCredentials,
@@ -25,17 +21,15 @@ import {
   CHAT_PROFILE_STORAGE_KEY,
   CHAT_PROFILE_STORAGE_VERSION,
   createChatProfile,
+  editableProfileName,
   parseChatProfileState,
+  profileModelCatalog,
   removeChatProfile,
+  resolveProfileName,
   serializeChatProfileState,
   upsertChatProfile,
   type ChatProfileState,
 } from "../src/lib/chat-profiles.ts";
-import {
-  createSelectionContext,
-  normalizeSelectionText,
-  selectionPrompt,
-} from "../src/lib/selection.ts";
 
 describe("chat configuration and request helpers", () => {
   test("normalizes compatible provider endpoints without leaking credentials", () => {
@@ -54,95 +48,17 @@ describe("chat configuration and request helpers", () => {
       .toThrow("not supported");
   });
 
-  test("builds an OpenAI-compatible request and parses a response", async () => {
-    const request = createChatRequest(
-      { apiKey: "secret", baseUrl: "https://example.test/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-    );
-    expect(request.url).toBe("https://example.test/v1/chat/completions");
-    expect(request.headers).toEqual({ Authorization: "Bearer secret", "Content-Type": "application/json" });
-    expect(JSON.parse(String(request.body))).toEqual({
-      model: "study-model",
-      messages: [{ role: "user", content: "hello" }],
-      stream: false,
-    });
-
-    const reasoningRequest = createChatRequest(
-      { apiKey: "secret", baseUrl: "https://example.test/v1", model: "reasoning-model", reasoningEffort: "high" },
-      [{ role: "user", content: "hello" }],
-    );
-    expect(JSON.parse(String(reasoningRequest.body)).reasoning_effort).toBe("high");
-
-    const answer = await requestChatCompletion(
-      { apiKey: "secret", baseUrl: "https://example.test/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-      undefined,
-      async () => new Response(JSON.stringify({ choices: [{ message: { content: "  hi there  " } }] }), { status: 200 }),
-      { transport: "direct" },
-    );
-    expect(answer).toBe("hi there");
-  });
-
-  test("builds the same-origin proxy request and reports transport failures clearly", async () => {
-    const request = createChatProxyRequest(
-      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-    );
-    expect(request.url).toBe(CHAT_PROXY_PATH);
-    expect(request.headers).toEqual({ Authorization: "Bearer secret", "Content-Type": "application/json" });
-    expect(JSON.parse(String(request.body))).toEqual({
-      baseUrl: "https://gateway.example/v1",
-      model: "study-model",
-      messages: [{ role: "user", content: "hello" }],
-    });
-
-    await expect(requestChatCompletion(
-      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-      undefined,
-      async () => { throw new TypeError("Failed to fetch"); },
-      { transport: "proxy" },
-    )).rejects.toThrow("local chat proxy");
-
-    await expect(requestChatCompletion(
-      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-      undefined,
-      async () => { throw new TypeError("Failed to fetch"); },
-      { transport: "direct" },
-    )).rejects.toThrow("gateway.example");
-  });
-
-  test("uses the same-origin proxy by default and can test a provider connection", async () => {
+  test("tests a provider connection through the same-origin route", async () => {
     const request = createChatTestRequest({
       apiKey: "secret",
       baseUrl: "https://gateway.example/v1",
       model: "study-model",
     });
     expect(request.url).toBe(CHAT_TEST_PATH);
+    expect(request.headers).toEqual({ Authorization: "Bearer secret", "Content-Type": "application/json" });
     expect(JSON.parse(String(request.body))).toEqual({
       baseUrl: "https://gateway.example/v1",
       model: "study-model",
-    });
-
-    let requestUrl = "";
-    let requestBody: unknown;
-    const answer = await requestChatCompletion(
-      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
-      [{ role: "user", content: "hello" }],
-      undefined,
-      async (input, init) => {
-        requestUrl = String(input);
-        requestBody = JSON.parse(String(init?.body));
-        return Response.json({ choices: [{ message: { content: "hello" } }] });
-      },
-    );
-    expect(answer).toBe("hello");
-    expect(requestUrl).toBe(CHAT_PROXY_PATH);
-    expect(requestBody).toEqual({
-      baseUrl: "https://gateway.example/v1",
-      model: "study-model",
-      messages: [{ role: "user", content: "hello" }],
     });
 
     expect(parseChatTestPayload({ baseUrl: " https://gateway.example/v1/ ", model: " m " }))
@@ -168,14 +84,25 @@ describe("chat configuration and request helpers", () => {
       undefined,
       async () => Response.json({ message: "invalid key" }, { status: 401 }),
     )).rejects.toThrow("invalid key");
+    await expect(testChatConnection(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      undefined,
+      async () => Response.json({ choices: [{ message: { content: "  " } }] }),
+    )).rejects.toThrow("invalid completion response");
   });
 
-  test("forwards a selected reasoning intensity to proxy and provider test requests", async () => {
-    const proxy = createChatProxyRequest(
-      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "reasoning-model", reasoningEffort: "high" },
-      [{ role: "user", content: "hello" }],
-    );
-    expect(JSON.parse(String(proxy.body)).reasoningEffort).toBe("high");
+  test("reports an unreachable local server instead of a bare fetch failure", async () => {
+    const unreachable = async (): Promise<Response> => { throw new TypeError("Failed to fetch"); };
+    await expect(testChatConnection(
+      { apiKey: "secret", baseUrl: "https://gateway.example/v1", model: "study-model" },
+      undefined,
+      unreachable,
+    )).rejects.toThrow("local connection test");
+    await expect(fetchChatModels({ apiKey: "secret", baseUrl: "https://gateway.example/v1" }, undefined, unreachable))
+      .rejects.toThrow("local model discovery service");
+  });
+
+  test("forwards a selected reasoning intensity to provider test requests", async () => {
     const testRequest = createChatTestRequest({
       apiKey: "secret",
       baseUrl: "https://gateway.example/v1",
@@ -229,21 +156,6 @@ describe("chat configuration and request helpers", () => {
     expect(models).toEqual([{ id: "model-a", reasoningEfforts: ["low", "medium", "high"] }]);
   });
 
-  test("validates untrusted proxy payloads before forwarding them", () => {
-    expect(parseChatProxyPayload({
-      baseUrl: " https://gateway.example/v1/ ",
-      model: " study-model ",
-      messages: [{ role: "user", content: "hello" }],
-    })).toEqual({
-      baseUrl: "https://gateway.example/v1",
-      model: "study-model",
-      messages: [{ role: "user", content: "hello" }],
-    });
-    expect(() => parseChatProxyPayload({ baseUrl: "file:///tmp/model", model: "m", messages: [] }))
-      .toThrow("HTTP or HTTPS");
-    expect(() => parseChatProxyPayload({ baseUrl: "https://gateway.example", model: "m", messages: [] }))
-      .toThrow("At least one chat message");
-  });
 });
 
 describe("saved chat provider profiles", () => {
@@ -263,6 +175,50 @@ describe("saved chat provider profiles", () => {
     expect(removeChatProfile(restored, "profile-two").activeProfileId).toBe("profile-one");
   });
 
+  test("names an unnamed setup after its model and keeps a chosen name", () => {
+    expect(resolveProfileName("", "model-a")).toBe("model-a");
+    expect(resolveProfileName("  Work gateway ", "model-a")).toBe("Work gateway");
+
+    const unnamed = createChatProfile({ name: resolveProfileName("", config.model), ...config }, () => "profile-one");
+    expect(editableProfileName(unnamed)).toBe("");
+    // Switching the model of an unnamed setup must not leave it labelled with the old one.
+    const switched = createChatProfile({
+      ...unnamed,
+      model: "other-model",
+      name: resolveProfileName(editableProfileName(unnamed), "other-model"),
+    });
+    expect(switched.name).toBe("other-model");
+
+    const named = createChatProfile({ name: "Work gateway", ...config }, () => "profile-two");
+    expect(editableProfileName(named)).toBe("Work gateway");
+    expect(resolveProfileName(editableProfileName(named), "other-model")).toBe("Work gateway");
+  });
+
+  test("keeps a fetched model list while it still describes the saved setup", () => {
+    const profile = createChatProfile({ name: "Gateway", ...config, reasoningEffort: "high" }, () => "profile-one");
+    const models = [
+      { id: "first-model", reasoningEfforts: [] },
+      { id: "study-model", reasoningEfforts: ["low", "high"] },
+    ];
+
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: config.apiKey, models })).toBe(models);
+    const savedOnly = [{ id: "study-model", reasoningEfforts: ["high"] }];
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: "rotated", models })).toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: "https://other.example/v1", apiKey: config.apiKey, models }))
+      .toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: config.apiKey, models: [models[0]!] }))
+      .toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: "", apiKey: "", models: [] })).toEqual(savedOnly);
+  });
+
+  test("keeps the configured model across a refreshed catalog when it is still offered", () => {
+    const models = [{ id: "first-model", reasoningEfforts: [] }, { id: "study-model", reasoningEfforts: [] }];
+    expect(selectCatalogModel(models, "study-model")).toBe("study-model");
+    expect(selectCatalogModel(models, "retired-model")).toBe("first-model");
+    expect(selectCatalogModel(models, "")).toBe("first-model");
+    expect(selectCatalogModel([], "study-model")).toBe("");
+  });
+
   test("ignores malformed local storage entries without throwing", () => {
     expect(parseChatProfileState("not json").profiles).toEqual([]);
     expect(parseChatProfileState(JSON.stringify({
@@ -270,15 +226,5 @@ describe("saved chat provider profiles", () => {
       activeProfileId: "bad",
       profiles: [{ id: "ok", name: "valid", ...config }, { id: "bad", name: "", ...config }],
     }))).toMatchObject({ activeProfileId: "ok", profiles: [{ id: "ok" }] });
-  });
-});
-
-describe("PDF selection context", () => {
-  test("normalizes and bounds selected text before it reaches the chat", () => {
-    expect(normalizeSelectionText("  one\n\t two  ")).toBe("one two");
-    expect(createSelectionContext("  one\n two ", 2, "box")).toEqual({ text: "one two", page: 2, source: "box" });
-    expect(createSelectionContext("", 2, "text")).toBeNull();
-    expect(createSelectionContext("text", 0, "text")).toBeNull();
-    expect(selectionPrompt({ text: "one two", page: 2, source: "text" })).toBe("[Selected from page 2]\none two");
   });
 });

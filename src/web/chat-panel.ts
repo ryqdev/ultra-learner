@@ -1,6 +1,7 @@
 import {
   DEFAULT_CHAT_CONFIG,
   fetchChatModels,
+  selectCatalogModel,
   testChatConnection,
   validateChatCredentials,
   validateChatConfig,
@@ -11,8 +12,11 @@ import {
   CHAT_PROFILE_STORAGE_KEY,
   CHAT_PROFILE_STORAGE_VERSION,
   createChatProfile,
+  editableProfileName,
   parseChatProfileState,
+  profileModelCatalog,
   removeChatProfile,
+  resolveProfileName,
   serializeChatProfileState,
   upsertChatProfile,
   type ChatProfileState,
@@ -24,6 +28,7 @@ interface ModelConfigPanelElements {
   configSummary: HTMLElement;
   statusDot: HTMLElement;
   profileSelect: HTMLSelectElement;
+  profileName: HTMLInputElement;
   newModelButton: HTMLButtonElement;
   providerPreset: HTMLSelectElement;
   apiKey: HTMLInputElement;
@@ -84,6 +89,7 @@ export class ModelConfigPanelController {
       configSummary: requiredElement("chat-config-summary"),
       statusDot: requiredElement("chat-status-dot"),
       profileSelect: requiredElement<HTMLSelectElement>("chat-profile-select"),
+      profileName: requiredElement<HTMLInputElement>("chat-profile-name"),
       newModelButton: requiredElement<HTMLButtonElement>("chat-new-model"),
       providerPreset: requiredElement<HTMLSelectElement>("chat-provider-preset"),
       apiKey: requiredElement<HTMLInputElement>("chat-api-key"),
@@ -123,6 +129,7 @@ export class ModelConfigPanelController {
         this.updateConfigSummary();
       });
     }
+    elements.profileName.addEventListener("input", () => this.updateConfigSummary());
     elements.modelSelect.addEventListener("change", () => this.selectModel(elements.modelSelect.value));
     elements.reasoningEffort.addEventListener("change", () => {
       this.syncConfigFromForm();
@@ -145,7 +152,7 @@ export class ModelConfigPanelController {
       });
       const profile = createChatProfile({
         id: elements.profileSelect.value || undefined,
-        name: this.profileState.profiles.find((candidate) => candidate.id === elements.profileSelect.value)?.name ?? config.model,
+        name: resolveProfileName(elements.profileName.value, config.model),
         ...config,
       });
       this.config = config;
@@ -220,6 +227,7 @@ export class ModelConfigPanelController {
     elements.deleteButton.disabled = !elements.profileSelect.value;
     const selected = this.profileState.profiles.find((profile) => profile.id === elements.profileSelect.value);
     if (selected) {
+      elements.profileName.value = editableProfileName(selected);
       elements.apiKey.value = selected.apiKey;
       elements.baseUrl.value = selected.baseUrl;
       this.config = {
@@ -228,11 +236,15 @@ export class ModelConfigPanelController {
         model: selected.model,
         ...(selected.reasoningEffort ? { reasoningEffort: selected.reasoningEffort } : {}),
       };
-      this.setModelCatalog([{
-        id: selected.model,
-        reasoningEfforts: selected.reasoningEffort ? [selected.reasoningEffort] : [],
-      }], selected.baseUrl, selected.apiKey, selected.model, selected.reasoningEffort);
+      // Saving must not throw away the list just fetched for these credentials.
+      const models = profileModelCatalog(selected, {
+        baseUrl: this.modelsBaseUrl,
+        apiKey: this.modelsApiKey,
+        models: this.models,
+      });
+      this.setModelCatalog(models, selected.baseUrl, selected.apiKey, selected.model, selected.reasoningEffort);
     } else {
+      elements.profileName.value = "";
       elements.apiKey.value = this.config.apiKey;
       elements.baseUrl.value = this.config.baseUrl;
       this.invalidateModels();
@@ -380,9 +392,7 @@ export class ModelConfigPanelController {
       option.textContent = model.id;
       elements.modelSelect.append(option);
     }
-    const chosen = models.some((model) => model.id === selectedModel)
-      ? selectedModel
-      : models[0]?.id ?? "";
+    const chosen = selectCatalogModel(models, selectedModel);
     elements.modelSelect.value = chosen;
     elements.modelSelect.disabled = models.length === 0;
     this.populateReasoningEfforts(chosen, selectedEffort);
@@ -445,8 +455,9 @@ export class ModelConfigPanelController {
     try {
       const models = await fetchChatModels(credentials, controller.signal);
       if (models.length === 0) throw new Error("The provider returned no usable models.");
-      const priorModel = this.models.some((model) => model.id === this.config.model) ? this.config.model : "";
-      this.setModelCatalog(models, credentials.baseUrl, credentials.apiKey, priorModel, this.config.reasoningEffort);
+      // Editing the credentials empties the old list, so the model to keep is the
+      // configured one, checked against what this provider now offers.
+      this.setModelCatalog(models, credentials.baseUrl, credentials.apiKey, this.config.model, this.config.reasoningEffort);
       this.syncConfigFromForm();
       const reasoningModels = models.filter((model) => model.reasoningEfforts.length > 0).length;
       elements.modelHelp.textContent = `${models.length} model${models.length === 1 ? "" : "s"} found${reasoningModels > 0 ? ` · ${reasoningModels} with reasoning controls` : ""}.`;
@@ -503,12 +514,13 @@ export class ModelConfigPanelController {
     const matchesSelected = selected
       && selected.apiKey === current.apiKey
       && selected.baseUrl === current.baseUrl
-      && selected.model === current.model;
+      && selected.model === current.model
+      && selected.name === resolveProfileName(elements.profileName.value, current.model);
     const selectedEffort = selected?.reasoningEffort ?? "";
     const sameEffort = selected && selectedEffort === current.reasoningEffort;
     elements.configSummary.textContent = matchesSelected
       && sameEffort
-      ? `${selected.name} · ${selected.model}${selectedEffort ? ` · ${selectedEffort}` : ""}`
+      ? `${[...new Set([selected.name, selected.model])].join(" · ")}${selectedEffort ? ` · ${selectedEffort}` : ""}`
       : hasConfig
         ? `${current.model}${current.reasoningEffort ? ` · ${current.reasoningEffort}` : ""} · unsaved changes`
         : "Set up a model";

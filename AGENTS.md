@@ -1,11 +1,12 @@
 # AGENTS.md
 
-This repository is a minimal AI-native development starter. Its agent layer keeps project instructions, durable decisions, reusable workflows, and executable verification beside the code.
+Ultra Learner is a local-first PDF reader built with Bun and TypeScript; [`docs/architecture.md`](docs/architecture.md) describes the product. The repository's agent layer keeps project instructions, durable decisions, reusable workflows, and executable verification beside the code.
 
 ## Repository layout
 
 ```text
 src/                 Product code.
+public/              Application shell markup and styles.
 test/                Behavior tests using Bun's built-in test runner.
 docs/                Current architecture and stable human-facing guidance.
 .agents/notes/       Rationale and trade-offs for non-trivial decisions.
@@ -16,12 +17,13 @@ scripts/             Repository checks invoked by the top-level gate.
 ## Commands
 
 ```sh
-bun run start -- <name>  # Run the example CLI.
-bun test                  # Run behavior tests.
-bun run check             # Run every required local gate.
+bun run start   # Start the local reader on port 8881.
+bun run dev     # Start in development mode with watch restarts.
+bun test        # Run behavior tests.
+bun run check   # Run every required local gate.
 ```
 
-Use Bun 1.3 or newer exclusively for dependency management, scripts, and tests. Do not create lockfiles or use commands from another package manager. The starter has no third-party runtime dependencies; Bun creates `bun.lock` when dependencies are added.
+Use Bun 1.3 or newer exclusively for dependency management, scripts, and tests. Do not create lockfiles or use commands from another package manager. PDF.js is the only third-party runtime dependency, and `bun.lock` is committed.
 
 ## Working agreement
 

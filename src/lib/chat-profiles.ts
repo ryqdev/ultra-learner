@@ -1,4 +1,4 @@
-import { validateChatConfig, type ChatConfig } from "./chat.ts";
+import { validateChatConfig, type ChatConfig, type ChatModel } from "./chat.ts";
 
 export const CHAT_PROFILE_STORAGE_VERSION = 1;
 export const CHAT_PROFILE_STORAGE_KEY = "ultra-learner.chat-profiles";
@@ -19,6 +19,39 @@ export interface ChatProfileState {
 export interface ChatProfileInput extends ChatConfig {
   id?: string;
   name: string;
+}
+
+/** A fetched model list together with the credentials it was fetched with. */
+export interface ModelCatalog {
+  baseUrl: string;
+  apiKey: string;
+  models: ChatModel[];
+}
+
+/** A setup saved without a name of its own is called after its model. */
+export function resolveProfileName(requestedName: string, model: string): string {
+  return requestedName.trim() || model.trim();
+}
+
+/**
+ * The name to offer for editing: empty when it only mirrors the model, so
+ * choosing another model renames an unnamed setup instead of leaving it
+ * labelled with the model it no longer uses.
+ */
+export function editableProfileName(profile: Pick<ChatProfile, "name" | "model">): string {
+  return profile.name === profile.model ? "" : profile.name;
+}
+
+/**
+ * Choose the models to offer for a saved setup. A catalog fetched with the
+ * same credentials stays usable; otherwise only the saved model is known.
+ */
+export function profileModelCatalog(profile: ChatProfile, fetched: ModelCatalog): ChatModel[] {
+  const describesProfile = fetched.baseUrl === profile.baseUrl
+    && fetched.apiKey === profile.apiKey
+    && fetched.models.some((model) => model.id === profile.model);
+  if (describesProfile) return fetched.models;
+  return [{ id: profile.model, reasoningEfforts: profile.reasoningEffort ? [profile.reasoningEffort] : [] }];
 }
 
 const PROFILE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;

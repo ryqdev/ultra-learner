@@ -12,6 +12,8 @@ The AI Guide now exposes only model configuration. It keeps provider presets, AP
 
 The reader removes the prompt composer, conversation messages, PDF-context card, AI-specific selection-mode controls, and workspace New chat action. Existing model transport and selection helpers remain available as internal groundwork, but the browser does not expose a workflow that sends a question or PDF content to a model. This decision supersedes the conversation UI portions of the earlier PDF chat companion, same-origin chat proxy, reader AI entry-point, and focused reader chrome decisions.
 
+The later [removal of the unreachable chat groundwork](2026-11-26-remove-unreachable-chat-groundwork.md) supersedes the retention of that transport and those selection helpers; the configuration-only guide described here is unchanged.
+
 ## Alternatives considered
 
 **Remove only the Ask-this-PDF heading.** The composer, selection card, and New chat action would still expose the same unfinished interaction without its empty-state label.

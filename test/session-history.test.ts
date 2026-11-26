@@ -6,6 +6,7 @@ import {
   listSessions,
   loadSessionPdf,
   saveSession,
+  saveSessionProgress,
   sessionMeta,
 } from "../src/web/session-history.ts";
 import type { SessionFetch } from "../src/web/session-history.ts";
@@ -33,7 +34,7 @@ describe("browser session transport", () => {
       return Response.json({ session }, { status: 201 });
     };
 
-    expect(await saveSession(file, data, fetcher as SessionFetch)).toEqual(session);
+    expect(await saveSession(file, fetcher as SessionFetch)).toEqual(session);
     expect(request?.method).toBe("POST");
     expect(request?.headers.get("x-ultra-learner-filename")).toBe(encodeURIComponent(file.name));
     expect(new Uint8Array(await request!.arrayBuffer())).toEqual(data);
@@ -44,8 +45,10 @@ describe("browser session transport", () => {
     expect(await loadSessionPdf(session, async () => new Response(pdf))).toEqual(pdf);
     await expect(loadSessionPdf(session, async () => new Response("", { status: 404 })))
       .rejects.toThrow("no longer available");
-    await expect(listSessions(async () => Response.json({ error: "Disk unavailable" }, { status: 500 })))
+    await expect(listSessions(async () => Response.json({ error: { message: "Disk unavailable" } }, { status: 500 })))
       .rejects.toThrow("Disk unavailable");
+    await expect(listSessions(async () => new Response("<html>proxy error</html>", { status: 502 })))
+      .rejects.toThrow("Unable to load your PDF history.");
   });
 
   test("deletes a persisted session and reports missing sessions", async () => {
@@ -60,6 +63,28 @@ describe("browser session transport", () => {
     expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}`);
     await expect(deleteSession(session, async () => new Response("Not found", { status: 404 })))
       .rejects.toThrow("no longer available");
+  });
+
+  test("sends the reading position and keeps a session's last page from the list", async () => {
+    let request: Request | undefined;
+    await saveSessionProgress(session.id, 14, async (input, init) => {
+      const target = typeof input === "string" && input.startsWith("/") ? `http://local.test${input}` : input;
+      request = new Request(target, init);
+      expect(init?.keepalive).toBe(true);
+      return new Response(null, { status: 204 });
+    });
+    expect(request?.method).toBe("PUT");
+    expect(new URL(request!.url).pathname).toBe(`/api/sessions/${session.id}/progress`);
+    expect(await request!.json()).toEqual({ page: 14 });
+
+    await expect(saveSessionProgress(session.id, 14, async () => new Response("Not found", { status: 404 })))
+      .rejects.toThrow("no longer available");
+    await expect(saveSessionProgress(session.id, 0, async () =>
+      Response.json({ error: { message: "The reading position must be a page number of 1 or more." } }, { status: 400 })))
+      .rejects.toThrow("page number of 1 or more");
+
+    const listed = async () => Response.json({ sessions: [{ ...session, lastPage: 14 }, { ...session, lastPage: 0 }] });
+    expect(await listSessions(listed as SessionFetch)).toEqual([{ ...session, lastPage: 14 }]);
   });
 
   test("formats local session metadata for the history list", () => {
