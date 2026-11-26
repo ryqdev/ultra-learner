@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAppServer } from "../src/server.ts";
+import path from "node:path";
+
+import { createAppServer, resolveContainedPath } from "../src/server.ts";
 import { CHAT_MODELS_PATH, CHAT_PROXY_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
@@ -297,6 +299,18 @@ describe("web server", () => {
     server = createAppServer({ port: 0, development: false, sessionRoot: await sessionRoot() });
     const response = await fetch(new URL("/../package.json", server.url));
     expect(response.status).toBe(404);
+  });
+
+  test("contains static paths using the platform's own separators", () => {
+    expect(resolveContainedPath("/srv/public", "/index.html", path.posix)).toBe("/srv/public/index.html");
+    expect(resolveContainedPath("/srv/public", "/", path.posix)).toBeUndefined();
+    expect(resolveContainedPath("/srv/public", "/%E0%A4%A", path.posix)).toBeUndefined();
+    expect(resolveContainedPath("C:\\app\\public", "/index.html", path.win32)).toBe("C:\\app\\public\\index.html");
+    expect(resolveContainedPath("C:\\app\\public", "/fonts/a.woff2", path.win32)).toBe("C:\\app\\public\\fonts\\a.woff2");
+    for (const escape of ["/../package.json", "/..%5C..%5Csecret.txt", "/%2E%2E/%2E%2E/secret.txt"]) {
+      const resolved = resolveContainedPath("C:\\app\\public", escape, path.win32);
+      expect(resolved === undefined || resolved.startsWith("C:\\app\\public\\")).toBe(true);
+    }
   });
 
   test("serves PDF worker resources with browser-safe content types", async () => {

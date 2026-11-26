@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { dirname, extname, join, normalize, resolve } from "node:path";
+import path, { dirname, extname, join } from "node:path";
 
 import {
   CHAT_PROXY_PATH,
@@ -345,16 +345,23 @@ async function listChatModels(request: Request, fetcher: ChatFetcher): Promise<R
   }
 }
 
-function safeAssetPath(root: string, pathname: string): string | undefined {
+type PathApi = Pick<typeof path, "isAbsolute" | "normalize" | "relative" | "resolve" | "sep">;
+
+/** Map a request path to a file inside `root`, or `undefined` when it would escape it. */
+export function resolveContainedPath(root: string, pathname: string, pathApi: PathApi = path): string | undefined {
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(pathname);
   } catch {
     return undefined;
   }
-  const normalizedPath = normalize(decodedPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const candidate = resolve(root, `.${normalizedPath}`);
-  return candidate.startsWith(`${resolve(root)}/`) ? candidate : undefined;
+  const normalizedPath = pathApi.normalize(decodedPath).replace(/^(\.\.(\/|\\|$))+/, "");
+  const base = pathApi.resolve(root);
+  const candidate = pathApi.resolve(base, `.${normalizedPath}`);
+  // Compare through the platform's own relative path: a hard-coded "/" never matches on Windows.
+  const offset = pathApi.relative(base, candidate);
+  const escapes = offset === ".." || offset.startsWith(`..${pathApi.sep}`) || pathApi.isAbsolute(offset);
+  return offset && !escapes ? candidate : undefined;
 }
 
 function responseForFile(path: string): Response {
@@ -376,7 +383,7 @@ function isFile(path: string): boolean {
 }
 
 export function createAppServer(options: AppServerOptions = {}): Bun.Server<undefined> {
-  const root = options.root ?? resolve(import.meta.dir, "..");
+  const root = options.root ?? path.resolve(import.meta.dir, "..");
   const publicRoot = join(root, "public");
   // Dependencies may be hoisted outside this package after installation.
   const pdfRoot = dirname(Bun.resolveSync("pdfjs-dist/package.json", import.meta.dir));
@@ -546,11 +553,11 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
       for (const [urlPrefix, directory] of Object.entries(pdfAssetDirectories)) {
         if (!url.pathname.startsWith(urlPrefix)) continue;
         const filename = url.pathname.slice(urlPrefix.length);
-        const pdfAssetPath = safeAssetPath(join(pdfRoot, directory), `/${filename}`);
+        const pdfAssetPath = resolveContainedPath(join(pdfRoot, directory), `/${filename}`);
         if (pdfAssetPath && isFile(pdfAssetPath)) return responseForFile(pdfAssetPath);
       }
 
-      const assetPath = safeAssetPath(publicRoot, url.pathname === "/" ? "/index.html" : url.pathname);
+      const assetPath = resolveContainedPath(publicRoot, url.pathname === "/" ? "/index.html" : url.pathname);
       if (assetPath && isFile(assetPath)) return responseForFile(assetPath);
 
       return new Response("Not found", { status: 404 });
