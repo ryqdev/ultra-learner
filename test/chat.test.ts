@@ -140,6 +140,24 @@ describe("chat configuration and request helpers", () => {
       { id: "ignored", reasoningEfforts: ["minimal", "high"] },
       { id: "invalid-efforts", reasoningEfforts: [] },
     ]);
+    // A capability spelled as a word: a refusal is not support, any other word still is.
+    expect(parseChatModelsResponse({
+      data: [
+        { id: "refused-no", supports_reasoning: "no" },
+        { id: "refused-empty", reasoning_supported: "" },
+        { id: "refused-nested", capabilities: { reasoning: " Unsupported " } },
+        { id: "refused-false", supports_reasoning: "false" },
+        { id: "accepted-yes", supports_reasoning: "yes" },
+        { id: "accepted-word", capabilities: { reasoning: "native" } },
+      ],
+    }).map((model) => [model.id, model.reasoningEfforts.length])).toEqual([
+      ["refused-no", 0],
+      ["refused-empty", 0],
+      ["refused-nested", 0],
+      ["refused-false", 0],
+      ["accepted-yes", 3],
+      ["accepted-word", 3],
+    ]);
     expect(parseChatModelsResponse({ data: { models: [{ id: "nested-model" }] } }))
       .toEqual([{ id: "nested-model", reasoningEfforts: [] }]);
 
