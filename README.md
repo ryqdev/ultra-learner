@@ -49,7 +49,7 @@ start builds a minified bundle once and keeps it in memory.
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.
 - Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
 - Zoom controls that keep the current reading position, fit-to-page behavior, responsive layouts, and a dark reading theme.
-- A model-configuration-only AI Guide with common hosted/local presets, API-key visibility control, model discovery, reasoning-level selection, connection testing, and named profiles. Profiles are stored in this browser's origin-local storage and can be reused across PDF sessions on the same device. The reader does not currently expose a prompt or send PDF content to a model.
+- A model-configuration-only AI Guide with common hosted/local presets, API-key visibility control, model discovery, reasoning-level selection, connection testing, and profiles that take an optional name and otherwise follow their model. Profiles are stored in this browser's origin-local storage and can be reused across PDF sessions on the same device. The reader does not currently expose a prompt or send PDF content to a model.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 - A generated sample PDF with cross-page links that exercises the same reader path as uploaded documents.
 

@@ -470,6 +470,11 @@ function inferredReasoningEfforts(modelId: string, record: Record<string, unknow
   return [];
 }
 
+/** Keep the preferred model when the catalog offers it; otherwise fall back to the catalog's first entry. */
+export function selectCatalogModel(models: ChatModel[], preferredModel: string): string {
+  return models.some((model) => model.id === preferredModel) ? preferredModel : models[0]?.id ?? "";
+}
+
 /** Normalize the varied model-list metadata used by OpenAI-compatible gateways. */
 export function parseChatModelsResponse(value: unknown): ChatModel[] {
   const models: ChatModel[] = [];

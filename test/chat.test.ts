@@ -17,6 +17,7 @@ import {
   parseChatProxyPayload,
   parseChatTestPayload,
   requestChatCompletion,
+  selectCatalogModel,
   testChatConnection,
   validateChatConfig,
   validateChatCredentials,
@@ -25,8 +26,11 @@ import {
   CHAT_PROFILE_STORAGE_KEY,
   CHAT_PROFILE_STORAGE_VERSION,
   createChatProfile,
+  editableProfileName,
   parseChatProfileState,
+  profileModelCatalog,
   removeChatProfile,
+  resolveProfileName,
   serializeChatProfileState,
   upsertChatProfile,
   type ChatProfileState,
@@ -261,6 +265,50 @@ describe("saved chat provider profiles", () => {
     expect(restored.profiles.map((profile) => profile.name)).toEqual(["Backup", "Gateway"]);
     expect(restored.profiles.find((profile) => profile.id === "profile-one")?.reasoningEffort).toBe("medium");
     expect(removeChatProfile(restored, "profile-two").activeProfileId).toBe("profile-one");
+  });
+
+  test("names an unnamed setup after its model and keeps a chosen name", () => {
+    expect(resolveProfileName("", "model-a")).toBe("model-a");
+    expect(resolveProfileName("  Work gateway ", "model-a")).toBe("Work gateway");
+
+    const unnamed = createChatProfile({ name: resolveProfileName("", config.model), ...config }, () => "profile-one");
+    expect(editableProfileName(unnamed)).toBe("");
+    // Switching the model of an unnamed setup must not leave it labelled with the old one.
+    const switched = createChatProfile({
+      ...unnamed,
+      model: "other-model",
+      name: resolveProfileName(editableProfileName(unnamed), "other-model"),
+    });
+    expect(switched.name).toBe("other-model");
+
+    const named = createChatProfile({ name: "Work gateway", ...config }, () => "profile-two");
+    expect(editableProfileName(named)).toBe("Work gateway");
+    expect(resolveProfileName(editableProfileName(named), "other-model")).toBe("Work gateway");
+  });
+
+  test("keeps a fetched model list while it still describes the saved setup", () => {
+    const profile = createChatProfile({ name: "Gateway", ...config, reasoningEffort: "high" }, () => "profile-one");
+    const models = [
+      { id: "first-model", reasoningEfforts: [] },
+      { id: "study-model", reasoningEfforts: ["low", "high"] },
+    ];
+
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: config.apiKey, models })).toBe(models);
+    const savedOnly = [{ id: "study-model", reasoningEfforts: ["high"] }];
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: "rotated", models })).toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: "https://other.example/v1", apiKey: config.apiKey, models }))
+      .toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: config.baseUrl, apiKey: config.apiKey, models: [models[0]!] }))
+      .toEqual(savedOnly);
+    expect(profileModelCatalog(profile, { baseUrl: "", apiKey: "", models: [] })).toEqual(savedOnly);
+  });
+
+  test("keeps the configured model across a refreshed catalog when it is still offered", () => {
+    const models = [{ id: "first-model", reasoningEfforts: [] }, { id: "study-model", reasoningEfforts: [] }];
+    expect(selectCatalogModel(models, "study-model")).toBe("study-model");
+    expect(selectCatalogModel(models, "retired-model")).toBe("first-model");
+    expect(selectCatalogModel(models, "")).toBe("first-model");
+    expect(selectCatalogModel([], "study-model")).toBe("");
   });
 
   test("ignores malformed local storage entries without throwing", () => {

@@ -65,6 +65,7 @@ describe("web server", () => {
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('<form class="chat-config-form" id="chat-config-form">');
+    expect(page).toContain('id="chat-profile-name"');
     expect(page).toContain('id="chat-provider-preset"');
     expect(page).toContain('id="chat-api-key-toggle"');
     expect(page).toContain('id="chat-fetch-models"');
