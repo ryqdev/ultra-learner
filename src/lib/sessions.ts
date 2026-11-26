@@ -73,11 +73,20 @@ export function isSessionSummary(value: unknown): value is SessionSummary {
     && candidate.fileSize <= MAXIMUM_PDF_FILE_SIZE
     && sessionFilenameValidationError(candidate.filename, candidate.fileSize) === null
     && typeof candidate.createdAt === "string"
-    && Number.isFinite(Date.parse(candidate.createdAt))
-    && (candidate.lastPage === undefined || isReadingPage(candidate.lastPage));
+    && Number.isFinite(Date.parse(candidate.createdAt));
 }
 
-export function toSessionSummary(metadata: SessionMetadata): SessionSummary {
+/**
+ * Read an untrusted summary. The stored position is optional detail, so an
+ * unusable one is dropped instead of discarding the session it belongs to.
+ */
+export function parseSessionSummary(value: unknown): SessionSummary | null {
+  if (!isSessionSummary(value)) return null;
+  const { lastPage } = value as { lastPage?: unknown };
+  return { ...toSessionSummary(value), ...(isReadingPage(lastPage) ? { lastPage } : {}) };
+}
+
+export function toSessionSummary(metadata: SessionSummary): SessionSummary {
   const { id, filename, fileSize, createdAt } = metadata;
   return { id, filename, fileSize, createdAt };
 }

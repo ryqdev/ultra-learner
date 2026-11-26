@@ -1,5 +1,5 @@
 import { formatFileSize } from "../lib/files.ts";
-import { isSessionSummary, type SessionSummary } from "../lib/sessions.ts";
+import { parseSessionSummary, type SessionSummary } from "../lib/sessions.ts";
 
 interface SessionListResponse {
   sessions?: unknown;
@@ -33,7 +33,7 @@ export async function listSessions(fetcher: SessionFetch = fetch): Promise<Sessi
   if (!response.ok) throw responseError(data, "Unable to load your PDF history.");
   const { sessions } = data as SessionListResponse;
   if (!Array.isArray(sessions)) throw new Error("The PDF history response is invalid.");
-  return sessions.filter(isSessionSummary);
+  return sessions.map(parseSessionSummary).filter((session): session is SessionSummary => session !== null);
 }
 
 export async function saveSession(
@@ -51,8 +51,8 @@ export async function saveSession(
   });
   const result = await responseJson(response);
   if (!response.ok) throw responseError(result, "Unable to save this PDF to your history.");
-  const { session } = result as SessionCreateResponse;
-  if (!isSessionSummary(session)) throw new Error("The saved PDF session is invalid.");
+  const session = parseSessionSummary((result as SessionCreateResponse).session);
+  if (!session) throw new Error("The saved PDF session is invalid.");
   return session;
 }
 

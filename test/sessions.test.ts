@@ -7,6 +7,7 @@ import {
   isSessionMetadata,
   isSessionSummary,
   parseSessionProgress,
+  parseSessionSummary,
   sessionFilenameValidationError,
 } from "../src/lib/sessions.ts";
 
@@ -43,10 +44,14 @@ describe("session metadata helpers", () => {
   test("accepts an optional last page and rejects impossible positions", () => {
     const summary = { id: "session-01", filename: "notes.pdf", fileSize: 128, createdAt: "2026-08-26T03:00:00.000Z" };
     expect(isSessionSummary(summary)).toBe(true);
-    expect(isSessionSummary({ ...summary, lastPage: 12 })).toBe(true);
+    expect(parseSessionSummary(summary)).toEqual(summary);
+    expect(parseSessionSummary({ ...summary, lastPage: 12, extra: true })).toEqual({ ...summary, lastPage: 12 });
+    // A position that cannot be used costs the position, not the session.
     for (const lastPage of [0, -3, 2.5, "4", null, Number.NaN, Number.MAX_VALUE]) {
-      expect(isSessionSummary({ ...summary, lastPage })).toBe(false);
+      expect(parseSessionSummary({ ...summary, lastPage })).toEqual(summary);
     }
+    expect(parseSessionSummary({ ...summary, id: "../escape", lastPage: 3 })).toBeNull();
+    expect(parseSessionSummary(null)).toBeNull();
 
     expect(parseSessionProgress({ page: 7, zoom: 2 })).toEqual({ page: 7 });
     for (const body of [{ page: 0 }, { page: "7" }, { page: 1.5 }, {}, null, 7, "7"]) {

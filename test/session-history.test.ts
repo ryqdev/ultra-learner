@@ -83,8 +83,11 @@ describe("browser session transport", () => {
       Response.json({ error: { message: "The reading position must be a page number of 1 or more." } }, { status: 400 })))
       .rejects.toThrow("page number of 1 or more");
 
-    const listed = async () => Response.json({ sessions: [{ ...session, lastPage: 14 }, { ...session, lastPage: 0 }] });
-    expect(await listSessions(listed as SessionFetch)).toEqual([{ ...session, lastPage: 14 }]);
+    const listed = async () => Response.json({
+      sessions: [{ ...session, lastPage: 14 }, { ...session, id: "session-02", lastPage: 0 }],
+    });
+    expect(await listSessions(listed as SessionFetch))
+      .toEqual([{ ...session, lastPage: 14 }, { ...session, id: "session-02" }]);
   });
 
   test("formats local session metadata for the history list", () => {
