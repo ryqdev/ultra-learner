@@ -35,6 +35,9 @@ import { ReaderPdfLinkService } from "./pdf-link-service.ts";
 GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.mjs";
 
 const PAGE_RENDER_LOADING_DELAY_MS = 160;
+const THUMBNAIL_WIDTH = 132;
+// Draw thumbnails one rail-height beyond the visible ones so ordinary scrolling rarely shows a blank.
+const THUMBNAIL_PRELOAD_MARGIN = "100% 0px";
 
 export interface PdfReaderElements {
   readerView: HTMLElement;
@@ -129,6 +132,10 @@ export class PdfReaderController {
   private pendingTextLayer: TextLayerBuilder | null = null;
   private pendingAnnotationLayer: AnnotationLayer | null = null;
   private thumbnailRenderTask: RenderTask | null = null;
+  private thumbnailObserver: IntersectionObserver | null = null;
+  // Thumbnails near the visible part of the rail that still need drawing, oldest first.
+  private readonly pendingThumbnails = new Set<HTMLButtonElement>();
+  private thumbnailWorker: Promise<void> | null = null;
   private vimScrollAnimationFrame: number | null = null;
   private vimScrollTarget: number | null = null;
   private readonly linkService: ReaderPdfLinkService;
@@ -525,6 +532,11 @@ export class PdfReaderController {
     this.pendingTextLayer?.cancel();
     this.pendingAnnotationLayer?.destroy();
     this.thumbnailRenderTask?.cancel();
+    this.thumbnailObserver?.disconnect();
+    this.thumbnailObserver = null;
+    this.pendingThumbnails.clear();
+    // A worker still winding down for the previous document must not hold up the next one.
+    this.thumbnailWorker = null;
     this.state.textLayer?.cancel();
     this.state.annotationLayer?.destroy();
     void this.state.loadingTask?.destroy();
@@ -858,7 +870,22 @@ export class PdfReaderController {
     return !this.mainPageRendering && this.state.document === pdf;
   }
 
+  /**
+   * Build the page rail with a placeholder per page and draw a thumbnail only
+   * once it nears the visible part of the rail, so a long document costs what
+   * the reader actually looks at rather than one canvas render per page.
+   */
   private async renderThumbnails(pdf: PDFDocumentProxy): Promise<void> {
+    let placeholderHeight = Math.round(THUMBNAIL_WIDTH * Math.SQRT2);
+    try {
+      // Reserve each thumbnail's final height up front; drawing must not move the rail under the reader.
+      const natural = (await pdf.getPage(1)).getViewport({ scale: 1 });
+      placeholderHeight = Math.floor(natural.height * (THUMBNAIL_WIDTH / natural.width));
+    } catch {
+      // The main view reports page failures; the rail keeps the default proportions.
+    }
+    if (this.state.document !== pdf) return;
+
     const fragment = document.createDocumentFragment();
     const buttons: HTMLButtonElement[] = [];
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -872,37 +899,77 @@ export class PdfReaderController {
       number.textContent = String(pageNumber).padStart(2, "0");
       const wrapper = document.createElement("span");
       wrapper.className = "thumbnail-canvas-wrap";
-      wrapper.append(document.createElement("canvas"));
+      const canvas = document.createElement("canvas");
+      canvas.width = THUMBNAIL_WIDTH;
+      canvas.height = placeholderHeight;
+      wrapper.append(canvas);
       button.append(number, wrapper);
       buttons.push(button);
       fragment.append(button);
     }
     this.elements.thumbnailList.replaceChildren(fragment);
-    this.updateActiveThumbnail();
 
-    for (let index = 0; index < buttons.length; index += 1) {
-      const thumbnail = buttons[index]?.querySelector("canvas");
-      if (!thumbnail) continue;
-      let rendered = false;
-      while (!rendered && this.state.document === pdf) {
-        if (!await this.waitForThumbnailOpportunity(pdf)) continue;
-        try {
-          const page = await pdf.getPage(index + 1);
-          if (this.mainPageRendering || this.state.document !== pdf) continue;
-          const natural = page.getViewport({ scale: 1 });
-          const viewport = page.getViewport({ scale: 132 / natural.width });
-          thumbnail.width = Math.floor(viewport.width);
-          thumbnail.height = Math.floor(viewport.height);
-          const renderTask = page.render({ canvas: thumbnail, viewport });
-          this.thumbnailRenderTask = renderTask;
-          await renderTask.promise;
-          rendered = true;
-        } catch (error) {
-          if (!isRenderingCancelled(error)) break;
-        } finally {
-          this.thumbnailRenderTask = null;
+    if (typeof IntersectionObserver === "function") {
+      this.thumbnailObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          const button = entry.target as HTMLButtonElement;
+          if (entry.isIntersecting) this.pendingThumbnails.add(button);
+          // Scrolled past before its turn came: drop it rather than draw what is no longer near.
+          else this.pendingThumbnails.delete(button);
         }
+        this.drawPendingThumbnails(pdf);
+      }, { root: this.elements.thumbnailList, rootMargin: THUMBNAIL_PRELOAD_MARGIN });
+      for (const button of buttons) this.thumbnailObserver.observe(button);
+    } else {
+      for (const button of buttons) this.pendingThumbnails.add(button);
+      this.drawPendingThumbnails(pdf);
+    }
+    this.updateActiveThumbnail();
+  }
+
+  /** Draw queued thumbnails one at a time, always yielding to main-page rendering. */
+  private drawPendingThumbnails(pdf: PDFDocumentProxy): void {
+    if (this.thumbnailWorker || this.state.document !== pdf) return;
+    const worker = (async () => {
+      while (this.state.document === pdf) {
+        const button = this.pendingThumbnails.values().next().value;
+        if (!button) return;
+        if (!await this.waitForThumbnailOpportunity(pdf) || !this.pendingThumbnails.has(button)) continue;
+        if (await this.drawThumbnail(pdf, button) === "interrupted") continue;
+        this.pendingThumbnails.delete(button);
+        this.thumbnailObserver?.unobserve(button);
       }
+    })();
+    this.thumbnailWorker = worker;
+    void worker.finally(() => {
+      if (this.thumbnailWorker !== worker) return;
+      this.thumbnailWorker = null;
+      if (this.pendingThumbnails.size > 0) this.drawPendingThumbnails(pdf);
+    });
+  }
+
+  private async drawThumbnail(
+    pdf: PDFDocumentProxy,
+    button: HTMLButtonElement,
+  ): Promise<"drawn" | "interrupted" | "failed"> {
+    const thumbnail = button.querySelector("canvas");
+    if (!thumbnail) return "failed";
+    try {
+      const page = await pdf.getPage(Number(button.dataset.page));
+      if (this.mainPageRendering || this.state.document !== pdf) return "interrupted";
+      const natural = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: THUMBNAIL_WIDTH / natural.width });
+      thumbnail.width = Math.floor(viewport.width);
+      thumbnail.height = Math.floor(viewport.height);
+      const renderTask = page.render({ canvas: thumbnail, viewport });
+      this.thumbnailRenderTask = renderTask;
+      await renderTask.promise;
+      return "drawn";
+    } catch (error) {
+      // The main page cancels thumbnail work to take priority; that thumbnail is simply tried again.
+      return isRenderingCancelled(error) ? "interrupted" : "failed";
+    } finally {
+      this.thumbnailRenderTask = null;
     }
   }
 
