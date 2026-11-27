@@ -197,6 +197,7 @@ svg {
 
 .history-list,
 .thumbnail-list,
+.reader-stage,
 .chat-config-form {
   scrollbar-color: var(--scrollbar) transparent;
   scrollbar-width: thin;
@@ -736,6 +737,7 @@ main {
 .app-shell.sidebar-collapsed .history-item-copy,
 .app-shell.sidebar-collapsed .history-item-arrow,
 .app-shell.sidebar-collapsed .history-item-delete,
+.app-shell.sidebar-collapsed .history-status,
 .app-shell.sidebar-collapsed .sidebar-refresh {
   display: none;
 }
@@ -1075,7 +1077,7 @@ main {
   background: var(--accent-soft);
 }
 
-/* The rail draws thumbnails 132px wide; displaying them at that width keeps them sharp. */
+/* The rail draws each thumbnail for this width at the display's pixel density, which keeps it sharp. */
 .thumbnail-canvas-wrap {
   position: relative;
   order: -1;
@@ -1109,9 +1111,16 @@ main {
   min-height: 0;
 }
 
+/*
+ * The page sits in the middle track of a grid whose side tracks never close up,
+ * so a page zoomed past the stage keeps a gutter at both ends of its scroll range.
+ */
 .reader-stage {
   position: relative;
+  display: grid;
   grid-row: 2;
+  grid-template-columns: minmax(24px, 1fr) auto minmax(24px, 1fr);
+  align-content: start;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -1121,8 +1130,9 @@ main {
 
 .canvas-frame {
   position: relative;
+  grid-column: 2;
   width: fit-content;
-  margin: 24px auto;
+  margin: 24px 0;
   padding: 0;
   border-radius: 2px;
   background: #fff;
@@ -2092,8 +2102,9 @@ body.is-dark .toast {
     padding: 40px 0 64px;
   }
 
+  /* Sized so the first line of the headline fits the column instead of breaking in two. */
   .welcome-copy h1 {
-    font-size: clamp(44px, 13vw, 64px);
+    font-size: clamp(34px, calc(12.6vw - 5px), 64px);
   }
 
   .upload-card {
@@ -2136,7 +2147,7 @@ body.is-dark .toast {
   }
 
   .canvas-frame {
-    margin: 14px auto;
+    margin: 14px 0;
   }
 
   .reader-toolbar {

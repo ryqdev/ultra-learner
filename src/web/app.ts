@@ -223,6 +223,8 @@ function historyItem(session: SessionSummary): HTMLElement {
   openButton.dataset.sessionOpen = session.id;
   openButton.disabled = openingSessionId !== null || deletingSessionId !== null;
   openButton.setAttribute("aria-label", `Open ${session.filename}`);
+  // The collapsed sidebar shows only an icon per document, and a long name is cut short when expanded.
+  openButton.title = session.filename;
   if (activeSessionId === session.id) openButton.setAttribute("aria-current", "page");
 
   const icon = document.createElement("span");
@@ -265,8 +267,9 @@ function renderHistory(): void {
   historyList.replaceChildren(...sessions.map(historyItem));
   historyCount.hidden = sessions.length === 0;
   historyCount.textContent = `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`;
-  historyStatus.textContent = "";
-  historyStatus.hidden = true;
+  historyStatus.classList.remove("is-error");
+  historyStatus.textContent = sessions.length === 0 ? "PDFs you open will appear here." : "";
+  historyStatus.hidden = sessions.length > 0;
 }
 
 async function refreshHistory(): Promise<void> {
