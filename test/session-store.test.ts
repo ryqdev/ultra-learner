@@ -146,20 +146,59 @@ describe("local PDF session store", () => {
 
     // Requests issued together are applied one after another, never interleaved.
     await Promise.all(Array.from({ length: 12 }, (_, index) =>
-      store.saveProgress("reading", index + 1, { writer: "tab-a", sequence: index + 1 })));
+      store.saveProgress("reading", index + 1, { writer: "tab-a", sequence: index + 1, recordedAt: 0 })));
     expect(await lastPage()).toBe(12);
 
     // An update that left the page earlier but arrived later must not win.
-    await store.saveProgress("reading", 2, { writer: "tab-a", sequence: 5 });
+    await store.saveProgress("reading", 2, { writer: "tab-a", sequence: 5, recordedAt: 9 });
     expect(await lastPage()).toBe(12);
-    await store.saveProgress("reading", 20, { writer: "tab-a", sequence: 13 });
+    await store.saveProgress("reading", 20, { writer: "tab-a", sequence: 13, recordedAt: 0 });
     expect(await lastPage()).toBe(20);
 
     // Another tab numbers its own updates, and an unnumbered update always applies.
-    await store.saveProgress("reading", 7, { writer: "tab-b", sequence: 1 });
+    await store.saveProgress("reading", 7, { writer: "tab-b", sequence: 1, recordedAt: 0 });
     expect(await lastPage()).toBe(7);
     await store.saveProgress("reading", 3);
     expect(await lastPage()).toBe(3);
+  });
+
+  test("does not let a closed tab's late update undo the tab that replaced it", async () => {
+    const root = await temporaryRoot();
+    let now = Date.parse("2026-11-26T10:00:00.000Z");
+    const store = new SessionStore({ root, createId: () => "reading", clock: () => new Date(now) });
+    await store.createSession("notes.pdf", pdf);
+    const lastPage = async (): Promise<number | undefined> => (await store.listSessions())[0]?.lastPage;
+
+    await store.saveProgress("reading", 31, { writer: "new-tab", sequence: 1, recordedAt: now });
+    // Recorded five seconds earlier by the tab that was closing, delivered two seconds later.
+    now += 2_000;
+    await store.saveProgress("reading", 30, { writer: "old-tab", sequence: 9, recordedAt: now - 7_000 });
+    expect(await lastPage()).toBe(31);
+
+    // Recorded later by yet another tab: applied at once.
+    await store.saveProgress("reading", 32, { writer: "third-tab", sequence: 1, recordedAt: now });
+    expect(await lastPage()).toBe(32);
+
+    // Long after, a device whose clock runs behind is not shut out by the comparison.
+    now += 60_000;
+    await store.saveProgress("reading", 12, { writer: "slow-clock", sequence: 1, recordedAt: 1_000 });
+    expect(await lastPage()).toBe(12);
+  });
+
+  test("finishes pending position updates before deleting their session", async () => {
+    const root = await temporaryRoot();
+    const store = new SessionStore({ root, createId: () => "reading" });
+    await store.createSession("notes.pdf", pdf);
+    const outcome = (work: Promise<void>): Promise<string> => work.then(() => "done", (error: Error) => error.name);
+
+    const before = Array.from({ length: 8 }, (_, index) => outcome(store.saveProgress("reading", index + 1)));
+    const deleted = outcome(store.deleteSession("reading"));
+    const after = outcome(store.saveProgress("reading", 99));
+
+    expect(await Promise.all(before)).toEqual(Array.from({ length: 8 }, () => "done"));
+    expect(await deleted).toBe("done");
+    expect(await after).toBe("SessionNotFoundError");
+    expect(await readdir(join(root, "sessions"))).toEqual([]);
   });
 
   test("keeps one session when identical uploads arrive together", async () => {
@@ -230,9 +269,12 @@ describe("local PDF session store", () => {
       await mkdir(join(sessions, directory));
       await writeFile(join(sessions, directory, file), contents);
     }
+    // A position write that was cut off between writing its draft and renaming it.
+    await writeFile(join(sessions, "valid-session", "progress.json.cut-off.tmp"), '{"version":1,"page":4}\n');
 
-    // A reader started moments later has to assume those uploads are still running.
+    // A reader started moments later has to assume those writes are still running.
     expect(await new SessionStore({ root }).listSessions()).toEqual([valid]);
+    expect(await readdir(join(sessions, "valid-session"))).toContain("progress.json.cut-off.tmp");
     expect((await readdir(sessions)).sort()).toEqual([
       ".incoming-abandoned",
       "corrupt-session",
@@ -244,6 +286,7 @@ describe("local PDF session store", () => {
     const startedLater = new SessionStore({ root, clock: () => new Date(Date.now() + 2 * 60 * 60 * 1000) });
     expect(await startedLater.listSessions()).toEqual([valid]);
     expect((await readdir(sessions)).sort()).toEqual(["corrupt-session", "unrelated-folder", "valid-session"]);
+    expect((await readdir(join(sessions, "valid-session"))).sort()).toEqual(["document.pdf", "metadata.json"]);
   });
 
   test("omits corrupt or incomplete entries from history", async () => {

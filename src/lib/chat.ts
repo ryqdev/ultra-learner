@@ -303,9 +303,16 @@ function effortValues(value: unknown): string[] {
   return [];
 }
 
+// Catalogs spell a capability flag as a boolean or as a word, and the words vary by gateway.
+// Unknown words still count as support, as before, but a plain refusal no longer does.
+const REFUSED_CAPABILITY_WORDS = new Set([
+  "", "0", "false", "no", "none", "null", "off", "disabled", "unavailable", "unsupported",
+  "not supported", "not_supported", "not-supported",
+]);
+
 function hasReasoningCapability(value: unknown): boolean {
   if (value === true) return true;
-  if (typeof value === "string") return value.toLowerCase() !== "false";
+  if (typeof value === "string") return !REFUSED_CAPABILITY_WORDS.has(value.trim().toLowerCase());
   if (Array.isArray(value)) return value.some((item) => typeof item === "string" && /reason/i.test(item));
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;

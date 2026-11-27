@@ -10,7 +10,7 @@ A session stored the document and nothing about reading it, so every reopen star
 
 Each session may carry a `progress.json` beside its metadata, holding a format version and the one-based page last shown. `PUT /api/sessions/<id>/progress` replaces it, writing a temporary file and renaming it so a concurrent read never sees a partial value. Session summaries expose the value as an optional `lastPage`; a missing, unreadable, or unsupported file means the document opens at its first page.
 
-The browser reports the page 400 ms after page turns settle, and immediately when the learner returns to the Library, opens another document, or closes the tab, using a keep-alive request so the last one survives the page. It writes only when the page differs from the stored one. Because those requests are not awaited, each carries a `writer` chosen per page load and an increasing `sequence`; the store applies one session's updates one at a time and drops an update numbered lower than one it has already applied from the same writer, so a request that left earlier but arrived later cannot put the position back. Opening a session starts at its `lastPage`, clamped to the document. An upload that [reuses a stored session](2026-11-26-reuse-identical-uploads.md) resumes at that session's page unless the learner has already moved off page one.
+The browser reports the page 400 ms after page turns settle, and immediately when the learner returns to the Library, opens another document, or closes the tab, using a keep-alive request so the last one survives the page. It writes only when the page differs from the stored one. Because those requests are not awaited, each carries a `writer` chosen per page load and an increasing `sequence`; the store applies one session's updates one at a time and drops an update numbered lower than one it has already applied from the same writer, so a request that left earlier but arrived later cannot put the position back. A sequence only orders one page load. Each update therefore also carries the time it was recorded, and for ten seconds after an update is applied, one from a different writer that was recorded earlier is dropped as well: that is a closing tab's last write overtaken by the tab that replaced it. Opening a session starts at its `lastPage`, clamped to the document. An upload that [reuses a stored session](2026-11-26-reuse-identical-uploads.md) resumes at that session's page unless the learner has already moved off page one.
 
 This supersedes the earlier consequence that reading position remains ephemeral. Zoom, scroll offset within a page, and panel state remain ephemeral.
 
@@ -30,8 +30,9 @@ This supersedes the earlier consequence that reading position remains ephemeral.
 
 - Reopening a document returns to the page where it was left, across restarts and across ports.
 - Session directories now contain one small file that changes; `metadata.json` and `document.pdf` are still never rewritten.
-- Deleting a session removes its position with it.
+- Deleting a session removes its position with it. The delete waits for that session's pending position writes and later ones find no session, so the two never work on the directory at once.
 - A failed position save is silent: it never interrupts reading, and the cost is reopening one page off.
+- Comparing recorded times trusts the writers' clocks, which on one device is the same clock. The ten-second limit keeps a device whose clock runs behind from being shut out for longer than that after another device's update.
 - The applied sequence numbers live in the server's memory. After a restart the first update from any writer is applied, which is correct because no earlier request can still be in flight.
 - A summary whose `lastPage` is not a usable page number is read as having none; the session stays listed.
 - The session API gains a fifth operation, protected like the others by host validation and by the browser's preflight for a JSON `PUT`.

@@ -237,12 +237,13 @@ export class ModelConfigPanelController {
         ...(selected.reasoningEffort ? { reasoningEffort: selected.reasoningEffort } : {}),
       };
       // Saving must not throw away the list just fetched for these credentials.
-      const models = profileModelCatalog(selected, {
-        baseUrl: this.modelsBaseUrl,
-        apiKey: this.modelsApiKey,
-        models: this.models,
-      });
+      const fetched = { baseUrl: this.modelsBaseUrl, apiKey: this.modelsApiKey, models: this.models };
+      const models = profileModelCatalog(selected, fetched);
       this.setModelCatalog(models, selected.baseUrl, selected.apiKey, selected.model, selected.reasoningEffort);
+      if (models !== fetched.models) {
+        // Only the saved model is known here; the page's initial hint would ask for credentials already filled in.
+        elements.modelHelp.textContent = "Showing the saved model. Fetch models to choose a different one.";
+      }
     } else {
       elements.profileName.value = "";
       elements.apiKey.value = this.config.apiKey;

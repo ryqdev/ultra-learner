@@ -28,6 +28,11 @@ const PROGRESS_VERSION = 1;
 // The leading dot keeps an upload in progress from ever reading as a session ID.
 const INCOMING_PREFIX = ".incoming-";
 const PDF_HEADER_WINDOW = 1_024;
+/**
+ * How long after a position update one from another page load is still judged
+ * by its recorded time. Kept short because two devices' clocks need not agree.
+ */
+const PROGRESS_REORDER_WINDOW_MS = 10_000;
 /** Entries newer than this may still be written by another running reader. */
 const INCOMPLETE_ENTRY_GRACE_MS = 60 * 60 * 1000;
 
@@ -87,10 +92,10 @@ export class SessionStore {
   private cleanup: Promise<void> | undefined;
   // Uploads being moved into place, one at a time.
   private commits: Promise<unknown> = Promise.resolve();
-  // Position writes still running or waiting, per session.
-  private readonly progressWrites = new Map<string, Promise<void>>();
+  // Changes to one session's directory that are still running or waiting.
+  private readonly sessionChanges = new Map<string, Promise<unknown>>();
   // The newest numbered position update applied to each session since this store started.
-  private readonly appliedProgress = new Map<string, ProgressOrder>();
+  private readonly appliedProgress = new Map<string, ProgressOrder & { appliedAt: number }>();
 
   public constructor(options: SessionStoreOptions = {}) {
     this.root = options.root ?? join(homedir(), ".ultra-learner");
@@ -198,28 +203,41 @@ export class SessionStore {
   /**
    * Remember the page a learner has reached, replacing any earlier position.
    * Writes for one session run one at a time in the order they were requested,
-   * and a numbered update older than one already applied from the same writer
-   * is dropped, because a browser's two requests need not arrive in the order
-   * they were sent.
+   * and an ordered update that an already applied one supersedes is dropped,
+   * because a browser's requests need not arrive in the order they were sent.
    */
   public async saveProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
     if (!isReadingPage(page)) throw new TypeError("The reading position must be a page number of 1 or more.");
     if (!isSessionId(id)) throw new SessionNotFoundError();
 
-    const write = (this.progressWrites.get(id) ?? Promise.resolve())
-      .catch(() => undefined)
-      .then(() => this.writeProgress(id, page, order));
-    this.progressWrites.set(id, write);
+    await this.inSessionOrder(id, () => this.writeProgress(id, page, order));
+  }
+
+  /**
+   * Run a change to one session's directory after every earlier change to it
+   * has finished, so a position write and a delete never work on it at once.
+   */
+  private async inSessionOrder<T>(id: string, change: () => Promise<T>): Promise<T> {
+    const queued = (this.sessionChanges.get(id) ?? Promise.resolve()).catch(() => undefined).then(change);
+    this.sessionChanges.set(id, queued);
     try {
-      await write;
+      return await queued;
     } finally {
-      if (this.progressWrites.get(id) === write) this.progressWrites.delete(id);
+      if (this.sessionChanges.get(id) === queued) this.sessionChanges.delete(id);
     }
   }
 
   private async writeProgress(id: string, page: number, order?: ProgressOrder): Promise<void> {
     const applied = this.appliedProgress.get(id);
-    if (order && applied?.writer === order.writer && order.sequence < applied.sequence) return;
+    const now = this.clock().getTime();
+    if (order && applied) {
+      const superseded = order.writer === applied.writer
+        ? order.sequence < applied.sequence
+        // Another page load, typically a closing tab's last write overtaken by the tab that
+        // replaced it. Its numbering is unrelated, so compare when each was recorded.
+        : order.recordedAt < applied.recordedAt && now - applied.appliedAt < PROGRESS_REORDER_WINDOW_MS;
+      if (superseded) return;
+    }
 
     await this.getSessionDocument(id);
     const directory = this.sessionDirectory(id);
@@ -233,21 +251,23 @@ export class SessionStore {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new SessionNotFoundError();
       throw error;
     }
-    if (order) this.appliedProgress.set(id, order);
+    if (order) this.appliedProgress.set(id, { ...order, appliedAt: now });
   }
 
   public async deleteSession(id: string): Promise<void> {
     if (!isSessionId(id)) throw new SessionNotFoundError();
-    await this.getSessionDocument(id);
-    this.appliedProgress.delete(id);
-    try {
-      await rm(this.sessionDirectory(id), { recursive: true });
-    } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-        throw new SessionNotFoundError();
+    await this.inSessionOrder(id, async () => {
+      await this.getSessionDocument(id);
+      this.appliedProgress.delete(id);
+      try {
+        await rm(this.sessionDirectory(id), { recursive: true });
+      } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+          throw new SessionNotFoundError();
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   }
 
   private get sessionsRoot(): string {
@@ -345,9 +365,10 @@ export class SessionStore {
   }
 
   /**
-   * Remove what an interrupted upload left behind: stale incoming directories
-   * and session directories that hold at most a document and no metadata, the
-   * state earlier versions could be killed in. Anything else is left untouched.
+   * Remove what an interrupted write left behind: stale incoming directories,
+   * session directories that hold at most a document and no metadata (the
+   * state earlier versions could be killed in), and position drafts that were
+   * never renamed into place. Anything else is left untouched.
    */
   private async removeIncompleteEntries(): Promise<void> {
     // Read the clock only when something needs judging, so an ordinary start does not consume it.
@@ -360,7 +381,16 @@ export class SessionStore {
         if (!entry.name.startsWith(INCOMING_PREFIX)) {
           if (!isSessionId(entry.name)) return;
           const contents = await readdir(directory);
-          if (contents.some((name) => name !== PDF_FILENAME)) return;
+          if (contents.some((name) => name !== PDF_FILENAME)) {
+            // A kept session: only a position draft whose write never finished is removed from it.
+            for (const name of contents) {
+              if (!name.startsWith(`${PROGRESS_FILENAME}.`) || !name.endsWith(".tmp")) continue;
+              now ??= this.clock().getTime();
+              const draft = join(directory, name);
+              if (now - (await lstat(draft)).mtimeMs >= INCOMPLETE_ENTRY_GRACE_MS) await rm(draft, { force: true });
+            }
+            return;
+          }
         }
         now ??= this.clock().getTime();
         if (now - (await lstat(directory)).mtimeMs < INCOMPLETE_ENTRY_GRACE_MS) return;

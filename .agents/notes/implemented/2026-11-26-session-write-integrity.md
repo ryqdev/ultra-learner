@@ -14,7 +14,7 @@ The store writes each upload into a private `sessions/.incoming-<uuid>/` directo
 
 The store accepts the request body as a stream and writes it to disk as it arrives, enforcing the size limit and checking the PDF header on the first kilobyte while it writes. The browser uploads the original `File` after PDF.js has parsed the document, instead of retaining a second copy of its bytes.
 
-On its first use after start, the store removes two kinds of leftovers once they are more than an hour old: incoming directories, and session-ID directories that contain nothing but an optional `document.pdf`, which is the state the previous write order could be interrupted in. The age limit protects an upload still being written by another running reader. Directories that hold a `metadata.json`, even an unreadable one, and directories with any other content are left alone.
+On its first use after start, the store removes two kinds of leftovers once they are more than an hour old: incoming directories, and session-ID directories that contain nothing but an optional `document.pdf`, which is the state the previous write order could be interrupted in. The age limit protects an upload still being written by another running reader. Directories that hold a `metadata.json`, even an unreadable one, and directories with any other content are left alone, except that a reading-position draft (`progress.json.*.tmp`) older than an hour is removed from them: it is what a position write leaves when it is cut off before its rename.
 
 ## Alternatives considered
 

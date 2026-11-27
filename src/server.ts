@@ -378,7 +378,9 @@ export function createAppServer(options: AppServerOptions = {}): Bun.Server<unde
           const encodedFilename = request.headers.get("x-ultra-learner-filename");
           let filename: string;
           try {
-            filename = encodedFilename ? decodeURIComponent(encodedFilename) : "";
+            // Whitespace around a file name is an accident of how the file was named. Refusing it
+            // would leave a document the reader has already opened out of history.
+            filename = encodedFilename ? decodeURIComponent(encodedFilename).trim() : "";
           } catch {
             return jsonError("The PDF filename is invalid.", 400);
           }

@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { createAppServer, resolveContainedPath } from "../src/server.ts";
 import { CHAT_MODELS_PATH, CHAT_TEST_PATH, CHAT_TEST_MESSAGE } from "../src/lib/chat.ts";
+import { THEME_STORAGE_KEY } from "../src/lib/theme.ts";
 
 let server: ReturnType<typeof createAppServer> | undefined;
 const sessionRoots: string[] = [];
@@ -65,6 +66,11 @@ describe("web server", () => {
     expect(page).toContain('role="separator"');
     expect(page).toContain('id="chat-config-form"');
     expect(page).toContain('<form class="chat-config-form" id="chat-config-form">');
+    // The page applies the theme itself before the bundle loads; both must use one storage key.
+    expect(page).toContain(`localStorage.getItem("${THEME_STORAGE_KEY}")`);
+    expect(page.indexOf("localStorage.getItem")).toBeLessThan(page.indexOf('id="app-shell"'));
+    expect(page).toContain('id="theme-button"');
+    expect(page).toContain('id="reader-theme-button"');
     expect(page).toContain('id="chat-profile-name"');
     expect(page).toContain('id="chat-provider-preset"');
     expect(page).toContain('id="chat-api-key-toggle"');
@@ -409,6 +415,15 @@ describe("web server", () => {
     expect(created.filename).toBe("课程笔记.pdf");
     expect(created.fileSize).toBe(pdf.byteLength);
 
+    // The same document under a name with stray whitespace is still that document.
+    const paddedResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("  课程笔记.pdf\u00a0") },
+      body: pdf,
+    });
+    expect(paddedResponse.status).toBe(200);
+    expect(await paddedResponse.json()).toEqual({ session: created });
+
     const repeatedResponse = await fetch(new URL("/api/sessions", server.url), {
       method: "POST",
       headers: { "X-Ultra-Learner-Filename": encodeURIComponent("课程笔记.pdf") },
@@ -453,12 +468,13 @@ describe("web server", () => {
       .toEqual({ sessions: [{ ...created, lastPage: 9 }] });
 
     // A numbered update that arrives after a newer one from the same page is accepted but not applied.
-    expect((await put(JSON.stringify({ page: 12, writer: "tab-1", sequence: 2 }))).status).toBe(204);
-    expect((await put(JSON.stringify({ page: 11, writer: "tab-1", sequence: 1 }))).status).toBe(204);
+    const recordedAt = Date.now();
+    expect((await put(JSON.stringify({ page: 12, writer: "tab-1", sequence: 2, recordedAt }))).status).toBe(204);
+    expect((await put(JSON.stringify({ page: 11, writer: "tab-1", sequence: 1, recordedAt }))).status).toBe(204);
     expect(await (await fetch(new URL("/api/sessions", server.url))).json())
       .toEqual({ sessions: [{ ...created, lastPage: 12 }] });
-    expect((await put(JSON.stringify({ page: 9, writer: "tab-2", sequence: 1 }))).status).toBe(204);
-    const unordered = await put(JSON.stringify({ page: 9, writer: "tab-2" }));
+    expect((await put(JSON.stringify({ page: 9, writer: "tab-2", sequence: 1, recordedAt }))).status).toBe(204);
+    const unordered = await put(JSON.stringify({ page: 9, writer: "tab-2", sequence: 2 }));
     expect(unordered.status).toBe(400);
 
     const invalid = await put(JSON.stringify({ page: 0 }));
@@ -503,6 +519,13 @@ describe("web server", () => {
     });
     expect(emptyResponse.status).toBe(400);
     expect(await emptyResponse.json()).toEqual({ error: { message: "That PDF is empty." } });
+
+    const blankNameResponse = await fetch(new URL("/api/sessions", server.url), {
+      method: "POST",
+      headers: { "X-Ultra-Learner-Filename": encodeURIComponent("   ") },
+      body: "%PDF-1.7\n",
+    });
+    expect(blankNameResponse.status).toBe(400);
 
     const unnamedResponse = await fetch(new URL("/api/sessions", server.url), { method: "POST", body: "%PDF-1.7\n" });
     expect(unnamedResponse.status).toBe(400);

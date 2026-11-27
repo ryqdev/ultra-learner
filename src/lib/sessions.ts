@@ -13,12 +13,15 @@ export interface SessionSummary {
 }
 
 /**
- * Numbers one writer's position updates. Two requests from the same page can
- * reach the server in either order; this lets the older one be recognized.
+ * Orders position updates that are sent without waiting for one another. One
+ * page load is one `writer` and numbers its updates, which is exact. Updates
+ * from different page loads can only be compared by when each was recorded.
  */
 export interface ProgressOrder {
   writer: string;
   sequence: number;
+  /** The writer's clock when the page was shown, in milliseconds since the epoch. */
+  recordedAt: number;
 }
 
 export interface SessionProgress {
@@ -60,24 +63,20 @@ export function isReadingPage(value: unknown): value is number {
 /** Parse the untrusted body of a reading-position update. */
 export function parseSessionProgress(value: unknown): SessionProgress {
   const candidate = value && typeof value === "object"
-    ? value as { page?: unknown; writer?: unknown; sequence?: unknown }
+    ? value as { page?: unknown; writer?: unknown; sequence?: unknown; recordedAt?: unknown }
     : {};
   if (!isReadingPage(candidate.page)) {
     throw new TypeError("The reading position must be a page number of 1 or more.");
   }
-  if (candidate.writer === undefined && candidate.sequence === undefined) return { page: candidate.page };
+  const { writer, sequence, recordedAt } = candidate;
+  if (writer === undefined && sequence === undefined && recordedAt === undefined) return { page: candidate.page };
 
-  const { writer, sequence } = candidate;
-  if (
-    typeof writer !== "string"
-    || !/^[a-zA-Z0-9-]{1,64}$/.test(writer)
-    || typeof sequence !== "number"
-    || !Number.isSafeInteger(sequence)
-    || sequence < 0
-  ) {
-    throw new TypeError("The reading position's writer and sequence are invalid.");
+  const isCount = (count: unknown): count is number =>
+    typeof count === "number" && Number.isSafeInteger(count) && count >= 0;
+  if (typeof writer !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(writer) || !isCount(sequence) || !isCount(recordedAt)) {
+    throw new TypeError("The reading position's writer, sequence, and time are invalid.");
   }
-  return { page: candidate.page, order: { writer, sequence } };
+  return { page: candidate.page, order: { writer, sequence, recordedAt } };
 }
 
 export function isSessionMetadata(value: unknown): value is SessionMetadata {

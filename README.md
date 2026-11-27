@@ -48,7 +48,7 @@ start builds a minified bundle once and keeps it in memory.
 - On-demand page thumbnails, previous/next controls, direct page entry with a visible page count, and Vim-friendly keyboard navigation (`j`/`k` scroll and continue onto the adjoining page at either edge, `d`/`u` page).
 - Native text selection and copying for PDFs that contain a text layer; scanned/image-only pages continue to render through the canvas.
 - Clickable PDF links and form controls, including table-of-contents destinations, cross-page navigation, external URLs, and embedded attachments.
-- Zoom controls that keep the current reading position, fit-to-page behavior, responsive layouts, and a dark reading theme.
+- Zoom controls that keep the current reading position, fit-to-page behavior, responsive layouts, and a dark reading theme that follows the system setting until one is chosen, is remembered across visits, and can be switched while reading.
 - A model-configuration-only AI Guide with common hosted/local presets, API-key visibility control, model discovery, reasoning-level selection, connection testing, and profiles that take an optional name and otherwise follow their model. Profiles are stored in this browser's origin-local storage and can be reused across PDF sessions on the same device. The reader does not currently expose a prompt or send PDF content to a model.
 - Friendly loading, invalid-file, empty-file, and rendering error states.
 
@@ -77,7 +77,7 @@ src/index.ts        Application entry point.
 src/server.ts       Bun HTTP server, session API, and browser bundle endpoint.
 src/session-store.ts Local PDF session persistence.
 src/web/            Reader, history, and model-configuration UI.
-src/lib/            Deterministic file, session, reader, model-request, and provider-profile helpers.
+src/lib/            Deterministic file, session, reader, model-request, provider-profile, and theme helpers.
 test/               Behavior and HTTP boundary tests.
 docs/               Stable architecture guidance.
 .agents/            Project decisions and reusable agent workflows.
