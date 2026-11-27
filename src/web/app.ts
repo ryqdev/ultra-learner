@@ -56,6 +56,7 @@ const sessionDeleteDialog = requiredElement<HTMLDialogElement>("session-delete-d
 const sessionDeleteFilename = requiredElement("session-delete-filename");
 const sessionDeleteCancel = requiredElement<HTMLButtonElement>("session-delete-cancel");
 const sessionDeleteConfirm = requiredElement<HTMLButtonElement>("session-delete-confirm");
+const themeColor = document.querySelector('meta[name="theme-color"]');
 
 readerView.style.setProperty("--chat-panel-min-width", `${MIN_CHAT_PANEL_WIDTH}px`);
 readerView.style.setProperty("--chat-panel-width", `${DEFAULT_CHAT_PANEL_WIDTH}px`);
@@ -563,6 +564,9 @@ chatCollapse.addEventListener("click", () => setChatCollapsed(true));
 
 function showThemeState(isDark: boolean): void {
   for (const button of themeButtons) button.setAttribute("aria-pressed", String(isDark));
+  // Browsers that tint their own chrome from this tag would otherwise frame a dark reader in the light color.
+  const canvasColor = window.getComputedStyle(document.body).getPropertyValue("--canvas").trim();
+  if (canvasColor) themeColor?.setAttribute("content", canvasColor);
 }
 
 // The page's inline script has already applied the stored or system theme.

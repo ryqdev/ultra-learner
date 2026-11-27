@@ -127,10 +127,17 @@ body.is-dark {
   box-sizing: border-box;
 }
 
+/*
+ * The root sets no background of its own, so the body's reaches the whole
+ * canvas. The dark tokens live on the body and a root background could not see them.
+ */
 html {
   min-width: 320px;
   min-height: 100%;
-  background: var(--canvas);
+}
+
+html:has(body.is-dark) {
+  color-scheme: dark;
 }
 
 body {
@@ -265,6 +272,16 @@ svg {
 .icon-button svg {
   width: 18px;
   height: 18px;
+}
+
+/* A theme control shows the theme it switches to. */
+.theme-icon-sun,
+body.is-dark .theme-icon-moon {
+  display: none;
+}
+
+body.is-dark .theme-icon-sun {
+  display: block;
 }
 
 .primary-button {
