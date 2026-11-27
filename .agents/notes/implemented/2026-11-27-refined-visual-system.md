@@ -8,7 +8,7 @@ The interface read as a prototype rather than a finished reading tool. Interface
 
 ## Decision
 
-`public/styles.css` is one token-driven visual system. Colors, shadows, radii, and font stacks are custom properties on `:root`. The dark theme redefines those tokens under the existing `body.is-dark` class, so components rarely need a dark-specific rule. The palette is a warm neutral one with a single deep-green accent, used for focus, active, and ready states. Primary actions are ink-colored buttons that invert in the dark theme. Depth comes from hairline borders and layered soft shadows instead of colored outlines.
+`public/styles.css` is one token-driven visual system. Colors, shadows, radii, and font stacks are custom properties on `:root`. The dark theme redefines those tokens under the existing `body.is-dark` class, so components rarely need a dark-specific rule. The palette is a warm neutral one with a single deep-green accent, used for focus, active, and ready states. Primary actions and the brand mark use the deep accent green in the light theme and a near-white fill in the dark theme. Depth comes from hairline borders and layered soft shadows instead of colored outlines.
 
 Interface text uses an 11.5–15.5px scale in the platform's system sans-serif. Monospace is limited to Base URL and API key values. The Library headline pairs a display sans with a serif italic accent word. Every font is a system font stack (SF Pro, Iowan Old Style, and SF Mono on Apple platforms, with Inter, Segoe UI, and Georgia-class fallbacks elsewhere), so the reader serves no font files and stays fully offline.
 
@@ -23,6 +23,8 @@ Markup, element IDs, class names toggled by browser code, layout breakpoints, an
 **Bundle a web font such as Inter or a serif display face.** This would make the rendering identical across platforms, but it adds binary assets to the npm package and a load-time dependency for every page. The system faces on each platform already read well at these sizes.
 
 **Adopt a CSS framework or component library.** It would bring a ready-made design language, but it contradicts the [architecture's](../../../docs/architecture.md) choice of repository-owned CSS without a UI framework. It would also add a runtime or build dependency.
+
+**Ink-black primary buttons in the light theme.** Near-black fills read as premium in isolation, but against the warm-neutral page they were the heaviest thing on screen and looked harsher than the rest of the system. The accent green keeps the primary action prominent with less weight, and it is the color the product already uses for its active states.
 
 **Keep the multi-accent palette and refine it.** The coral and lime accents gave the Library some personality, but three accents competed for attention on a screen with one primary action, and no state needed them.
 

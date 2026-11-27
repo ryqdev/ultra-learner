@@ -44,10 +44,12 @@
   --danger: #c8372d;
   --danger-soft: rgba(200, 55, 45, 0.09);
 
-  --primary: #1b1a17;
-  --primary-hover: #34322d;
-  --primary-ink: #faf9f6;
-  --primary-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --primary: #2d5e4f;
+  --primary-hover: #254f42;
+  --primary-ink: #ffffff;
+  --primary-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --primary-shadow: 0 1px 2px rgba(31, 74, 61, 0.22), 0 6px 16px -6px rgba(31, 74, 61, 0.42);
+  --primary-shadow-sm: 0 1px 2px rgba(31, 74, 61, 0.24);
 
   --shadow-xs: 0 1px 2px rgba(20, 19, 16, 0.06);
   --shadow-sm: 0 1px 2px rgba(20, 19, 16, 0.05), 0 2px 8px -2px rgba(20, 19, 16, 0.08);
@@ -107,6 +109,8 @@ body.is-dark {
   --primary-hover: #ffffff;
   --primary-ink: #161615;
   --primary-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px -6px rgba(0, 0, 0, 0.55);
+  --primary-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px -2px rgba(0, 0, 0, 0.4);
@@ -274,7 +278,7 @@ svg {
   border: 0;
   border-radius: var(--radius-md);
   background: var(--primary);
-  box-shadow: var(--primary-highlight), 0 1px 2px rgba(20, 19, 16, 0.2), 0 6px 16px -6px rgba(20, 19, 16, 0.35);
+  box-shadow: var(--primary-highlight), var(--primary-shadow);
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 600;
@@ -384,7 +388,7 @@ main {
   color: var(--primary-ink);
   border-radius: 8px;
   background: var(--primary);
-  box-shadow: var(--primary-highlight), 0 1px 2px rgba(20, 19, 16, 0.2);
+  box-shadow: var(--primary-highlight), var(--primary-shadow-sm);
 }
 
 .brand-mark svg {
@@ -1694,7 +1698,7 @@ body.is-resizing-chat * {
   color: var(--primary-ink);
   border-color: transparent;
   background: var(--primary);
-  box-shadow: var(--primary-highlight), 0 1px 2px rgba(20, 19, 16, 0.2);
+  box-shadow: var(--primary-highlight), var(--primary-shadow-sm);
   font-weight: 600;
 }
 
