@@ -12,6 +12,8 @@ Each entry into reading mode starts with the Pages rail open and the AI Guide cl
 
 This decision supersedes the closed-thumbnail default in [the focused reader chrome decision](2026-08-28-focused-reader-chrome.md). It does not change the model configuration workflow itself.
 
+The later [overlay Pages rail](2026-11-27-overlay-pages-rail-starts-closed.md) decision limits the open default to layouts where the rail has a column of its own. Where the rail lies over the page, it starts closed.
+
 ## Alternatives considered
 
 **Preserve panel state between documents.** Remembering manual changes would reduce repeated toggles, but a prior document's layout would make the next document's starting state unpredictable.

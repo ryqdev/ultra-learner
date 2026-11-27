@@ -12,6 +12,7 @@ import {
 import { TextLayerBuilder } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 
 import { documentTitle, pdfFileValidationError, pdfOpenErrorMessage } from "../lib/files.ts";
+import { pagesRailStartsOpen } from "../lib/layout.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -182,7 +183,7 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = false;
     this.elements.readerError.hidden = true;
     this.elements.canvasFrame.hidden = true;
-    this.elements.readerView.classList.remove("sidebar-hidden");
+    this.elements.readerView.classList.toggle("sidebar-hidden", !pagesRailStartsOpen(window.innerWidth));
   }
 
   public async loadPdf(data: Uint8Array, filename: string, initialPage = 1): Promise<boolean> {
@@ -499,6 +500,8 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = true;
     this.elements.canvasFrame.hidden = true;
     this.elements.readerError.hidden = false;
+    // A document that never opened has no pages to list, so its rail would sit empty beside the message.
+    if (!this.state.document) this.elements.readerView.classList.add("sidebar-hidden");
   }
 
   private async calculateFitScale(page: PDFPageProxy): Promise<number> {

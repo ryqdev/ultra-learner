@@ -987,8 +987,11 @@ main {
   transition: margin-left 220ms var(--ease);
 }
 
+/* A closed rail is also hidden once it has slid away, so its thumbnails leave the tab order. */
 .reader-view.sidebar-hidden .reader-sidebar {
   margin-left: -210px;
+  visibility: hidden;
+  transition: margin-left 220ms var(--ease), visibility 0s 220ms;
 }
 
 .sidebar-heading {
@@ -1940,7 +1943,11 @@ body.is-dark .toast {
 
 /* Responsive layouts */
 
-@media (min-width: 761px) and (max-width: 1180px) {
+/*
+ * At this width and below the Pages rail lies over the page instead of taking a column.
+ * It starts under the control strip so the strip's own controls stay reachable.
+ */
+@media (max-width: 1180px) {
   .reader-view,
   .reader-view.sidebar-hidden {
     grid-template-columns:
@@ -1956,7 +1963,7 @@ body.is-dark .toast {
 
   .reader-sidebar {
     position: absolute;
-    top: 0;
+    top: var(--toolbar-height);
     bottom: 0;
     left: 0;
     width: 210px;
@@ -2087,24 +2094,12 @@ body.is-dark .toast {
     margin-top: 18px;
   }
 
+  /* Both panels overlay the page here, so no panel state may give either one a column. */
   .reader-view,
+  .reader-view.sidebar-hidden,
   .reader-view.chat-collapsed,
   .reader-view.sidebar-hidden.chat-collapsed {
     grid-template-columns: 0 minmax(0, 1fr);
-  }
-
-  .reader-sidebar {
-    position: absolute;
-    top: var(--toolbar-height);
-    bottom: 0;
-    left: 0;
-    width: 210px;
-    margin-left: -210px;
-  }
-
-  .reader-view:not(.sidebar-hidden) .reader-sidebar {
-    margin-left: 0;
-    box-shadow: var(--shadow-overlay);
   }
 
   .chat-panel {
