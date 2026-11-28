@@ -95,9 +95,12 @@ versions older than `latest` are rejected.
 It then installs with the frozen Bun lockfile, runs `bun run check`, and tests a
 packed archive in a clean consumer directory. It publishes that same archive and
 installs the exact version from npm with a fresh cache to verify the CLI, HTTP
-server, browser bundle, and PDF.js assets. No separate application build step is
-required: the package ships TypeScript and builds the browser bundle at runtime,
-which the package smoke test exercises.
+server, browser bundle, and PDF.js assets. npm accepts an upload before its
+registry metadata lists the version, often for more than a minute, so
+verification waits up to five minutes for the version to appear (and, after a new
+upload, for `latest` to point at it) before it fails. No separate application
+build step is required: the package ships TypeScript and builds the browser
+bundle at runtime, which the package smoke test exercises.
 
 Bun does not currently exchange npm OIDC credentials itself. The small
 [publishing adapter](../scripts/publish-npm.ts) requests a GitHub OIDC identity and
@@ -122,6 +125,9 @@ authentication/configuration problem and retry the same tag:
 ```sh
 gh workflow run release-please.yml --repo ryqdev/ultra-learner --ref main -f release_tag=v0.1.0
 ```
+
+If the upload step succeeded and only verification failed, the version is already
+on npm; retrying the same tag skips the upload and repeats verification.
 
 Retries use the original tag, skip versions already on npm, and never move
 `latest` to an older version. Do not move tags or bump a version just to retry an
