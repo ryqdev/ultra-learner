@@ -150,7 +150,15 @@ describe("web server", () => {
     const { root, entry } = await applicationRoot('console.log("first build");\n');
     const bundle = async (): Promise<string> => (await fetch(new URL("/assets/app.js", server!.url))).text();
 
-    server = createAppServer({ port: 0, root, sessionRoot: await sessionRoot() });
+    const environment = Bun.env.NODE_ENV;
+    Bun.env.NODE_ENV = "production";
+    try {
+      server = createAppServer({ port: 0, root, sessionRoot: await sessionRoot() });
+    } finally {
+      // Assigning undefined would store the string "undefined".
+      if (environment === undefined) delete Bun.env.NODE_ENV;
+      else Bun.env.NODE_ENV = environment;
+    }
     expect(server.development).toBe(false);
     expect(await bundle()).toContain("first build");
     await writeFile(entry, 'console.log("second build");\n');
