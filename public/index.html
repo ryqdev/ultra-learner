@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f6f2" />
+    <meta name="theme-color" content="#f8f8f9" />
     <meta
       name="description"
       content="A calm, local-first PDF reader for focused learning."
@@ -93,7 +93,29 @@
       <main>
         <section class="welcome-view" id="welcome-view" aria-labelledby="welcome-title">
           <div class="welcome-copy">
-            <h1 id="welcome-title">Make every page<br /><em>count.</em></h1>
+            <div class="welcome-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48">
+                <defs>
+                  <linearGradient id="welcome-mark-grad" x1="24" y1="6" x2="24" y2="42" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.34" />
+                    <stop offset="100%" stop-color="currentColor" stop-opacity="0.08" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M12 10h15.5c4.7 0 8.5 3.8 8.5 8.5V38H20.5A8.5 8.5 0 0 1 12 29.5V10Z"
+                  fill="url(#welcome-mark-grad)"
+                />
+                <path
+                  d="M20 10v19c0 5 4 9 9 9"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-opacity="0.22"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+            <h1 id="welcome-title">Make every page <em>count.</em></h1>
 
             <div class="upload-card" id="drop-zone">
               <input id="file-input" type="file" accept="application/pdf,.pdf" hidden />
