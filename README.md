@@ -1,6 +1,6 @@
 # Ultra Learner
 
-Ultra Learner is a calm, local-first PDF reader built with Bun and TypeScript. It gives a learner a focused place to open a document, browse page thumbnails, move between pages, and adjust the reading scale. Uploaded PDFs are retained by the local Bun process in `~/.ultra-learner` so they can be reopened from the reading history. A right-hand AI Guide stores reusable OpenAI-compatible model settings for future learning features.
+Ultra Learner is a calm, local-first PDF reader built with Bun and TypeScript. It gives a learner a focused place to open a document, browse page thumbnails, move between pages, and adjust the reading scale. Uploaded PDFs are retained by the local Bun process in `~/.ultra-learner`, or the directory given with `--data-dir`, so they can be reopened from the reading history. A right-hand AI Guide stores reusable OpenAI-compatible model settings for future learning features.
 
 This is the first product prototype.
 
@@ -15,11 +15,13 @@ bunx @ryqdev/ultra-learner
 ```
 
 Open the printed URL in your browser. Use `--port 4100` to choose a port,
-`--help` for usage, or `--version` to check the installed version. The server
-only answers requests addressed to `127.0.0.1`, `localhost`, or `[::1]`; pass
-`--allow-host <host>` when a forwarding proxy presents another host name. The package
-requires Bun at runtime. Use `bunx @ryqdev/ultra-learner@latest` to request the
-latest release, or specify a version to reproduce an older release.
+`--data-dir <path>` (or `ULTRA_LEARNER_HOME`) to keep sessions somewhere other
+than `~/.ultra-learner`, `--help` for usage, or `--version` to check the
+installed version. The server listens on `127.0.0.1` and only answers requests
+addressed to `127.0.0.1`, `localhost`, or `[::1]`; pass `--allow-host <host>`
+when a forwarding proxy presents another host name. The package requires Bun at
+runtime. Use `bunx @ryqdev/ultra-learner@latest` to request the latest release,
+or specify a version to reproduce an older release.
 
 To run from a repository checkout:
 
@@ -39,6 +41,15 @@ bun run dev
 `bun run dev` sets `NODE_ENV=development`, which rebuilds the unminified browser
 bundle on every request so edits under `src/web/` appear on reload. Every other
 start builds a minified bundle once and keeps it in memory.
+
+## Self-hosting
+
+To open one library from several of your devices, run the reader on a server
+behind a gateway that authenticates visitors and terminates HTTPS, such as
+Tailscale Serve or Caddy with an authentication service. The reader has no
+accounts, so anyone who reaches it directly can read and delete every saved PDF.
+[Self-hosting](docs/deployment.md) covers the supported setups, `--host`, proxy
+limits, a systemd unit, backups, and what changes for a self-hosted reader.
 
 ## Current experience
 
@@ -79,7 +90,7 @@ src/session-store.ts Local PDF session persistence.
 src/web/            Reader, history, and model-configuration UI.
 src/lib/            Deterministic file, session, reader, model-request, provider-profile, and theme helpers.
 test/               Behavior and HTTP boundary tests.
-docs/               Stable architecture guidance.
+docs/               Stable architecture and self-hosting guidance.
 .agents/            Project decisions and reusable agent workflows.
 ```
 
