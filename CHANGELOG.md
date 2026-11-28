@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/ryqdev/ultra-learner/compare/v0.2.0...v0.3.0) (2026-11-28)
+
+
+### Features
+
+* redesign the interface around a token-driven visual system ([92acf63](https://github.com/ryqdev/ultra-learner/commit/92acf63865f414dc4f5b1726ec2a503a0f6a890d))
+* redesign the interface around a token-driven visual system ([471af5f](https://github.com/ryqdev/ultra-learner/commit/471af5fbcdba3c345acbe805d932bfde32eb84e2))
+* support single-user self-hosting behind an authenticating gateway ([2477e5e](https://github.com/ryqdev/ultra-learner/commit/2477e5eae9319a78bdc7127260ccecdb954d7dd8))
+* support single-user self-hosting behind an authenticating gateway ([6788960](https://github.com/ryqdev/ultra-learner/commit/6788960c65669d2ac7faf08edd9a756976f8634d)), closes [#20](https://github.com/ryqdev/ultra-learner/issues/20)
+
+
+### Bug Fixes
+
+* carry the dark theme to the root canvas and browser chrome ([7be2c91](https://github.com/ryqdev/ultra-learner/commit/7be2c91c9272cc20ebdd10366289bcebee658f5b))
+* sharpen page thumbnails and tidy reader and Library details ([4aa8e9c](https://github.com/ryqdev/ultra-learner/commit/4aa8e9cc5918d2ce93661cb41a5edfc8fdd02b1c))
+* start the Pages rail closed where it overlays the page ([9ffa4e1](https://github.com/ryqdev/ultra-learner/commit/9ffa4e124f79401b775db6a37c7fc87780b057e7))
+
 ## [0.2.0](https://github.com/ryqdev/ultra-learner/compare/v0.1.0...v0.2.0) (2026-11-26)
 
 
