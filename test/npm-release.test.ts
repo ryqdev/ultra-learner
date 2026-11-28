@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { name } from "../package.json";
 import { planRelease, readRegistry, type Fetcher } from "../scripts/check-npm-release.ts";
 import { exchangePublishToken } from "../scripts/publish-npm.ts";
+import { visibilityTimeoutMs, waitForVisibleRelease } from "../scripts/verify-npm-release.ts";
 
 const pkg = (version: string) => ({ name, version });
 const metadata = (latest: string, versions = [latest]) => ({
@@ -58,6 +59,54 @@ describe("npm release planning", () => {
     await expect(readRegistry(async () => { throw new Error("network unavailable"); })).rejects.toThrow("network unavailable");
     await expect(readRegistry(async () => new Response("invalid json"))).rejects.toThrow();
     expect(await readRegistry(async () => Response.json(metadata("0.1.0")))).toEqual(metadata("0.1.0"));
+  });
+});
+
+// The registry's answer depends on simulated time, which advances only while verification sleeps.
+function delayedRegistry(answer: (elapsed: number) => unknown) {
+  let elapsed = 0;
+  let reads = 0;
+  return {
+    get elapsed() { return elapsed; },
+    get reads() { return reads; },
+    read: async () => { reads++; return answer(elapsed); },
+    sleep: async (ms: number) => { elapsed += ms; },
+    now: () => elapsed,
+  };
+}
+
+describe("npm release verification", () => {
+  test("waits for a new upload that npm lists only after more than a minute", async () => {
+    const registry = delayedRegistry((elapsed) => elapsed < 75_000 ? metadata("0.1.0") : metadata("0.2.0", ["0.1.0", "0.2.0"]));
+    await waitForVisibleRelease("0.2.0", true, registry);
+    expect(registry.elapsed).toBeGreaterThanOrEqual(75_000);
+  });
+
+  test("a new upload is not verified until npm also reports it as latest", async () => {
+    const registry = delayedRegistry((elapsed) => elapsed < 30_000
+      ? metadata("0.1.0", ["0.1.0", "0.2.0"]) : metadata("0.2.0", ["0.1.0", "0.2.0"]));
+    await waitForVisibleRelease("0.2.0", true, registry);
+    expect(registry.elapsed).toBeGreaterThanOrEqual(30_000);
+  });
+
+  test("a retry of an existing older version is verified without waiting for latest", async () => {
+    const registry = delayedRegistry(() => metadata("0.2.0", ["0.1.1", "0.2.0"]));
+    await waitForVisibleRelease("0.1.1", false, registry);
+    expect(registry.reads).toBe(1);
+    expect(registry.elapsed).toBe(0);
+  });
+
+  test("a version that never appears fails once the waiting period ends", async () => {
+    const registry = delayedRegistry(() => metadata("0.1.0"));
+    await expect(waitForVisibleRelease("0.2.0", true, registry)).rejects.toThrow("after 5 minutes: Version is not yet visible");
+    expect(registry.elapsed).toBeGreaterThan(60_000);
+    expect(registry.elapsed).toBeLessThanOrEqual(visibilityTimeoutMs);
+  });
+
+  test("persistent registry failures are reported instead of being treated as visible", async () => {
+    const registry = delayedRegistry(() => { throw new Error("Cannot read npm metadata: HTTP 503"); });
+    await expect(waitForVisibleRelease("0.2.0", true, registry)).rejects.toThrow("HTTP 503");
+    expect(registry.elapsed).toBeLessThanOrEqual(visibilityTimeoutMs);
   });
 });
 

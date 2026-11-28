@@ -14,7 +14,7 @@ The package uses the MIT license. PDF.js remains a declared dependency with its 
 
 Release Please manages a root-package release PR, version, changelog, tag, and GitHub Release. Merging the release PR initiates npm publication in the same workflow; the built-in GitHub token cannot trigger a separate publishing workflow. Release PR CI is explicitly dispatched for the same reason. The manifest starts empty and the initial version is 0.1.0 because this package has not previously been published.
 
-Publication checks the tag against the package version and main history, rejects registry failures and downgrades of latest, and skips uploads for existing versions. Bun tests an archive before publishing that exact archive, then installs the exact registry version into an isolated consumer for verification. Manual retries use the original release tag.
+Publication checks the tag against the package version and main history, rejects registry failures and downgrades of latest, and skips uploads for existing versions. Bun tests an archive before publishing that exact archive, then installs the exact registry version into an isolated consumer for verification. npm accepts an upload before its registry metadata lists the version, and the first trusted publication took about 75 seconds to appear, so verification polls the registry for up to five minutes before installing. Manual retries use the original release tag.
 
 Keep all package operations on Bun. A small adapter exchanges the GitHub workflow identity through npm's documented OIDC endpoint and passes the short-lived credential to Bun in memory. This avoids a second package manager and a persistent publishing secret. npm requires an existing package for Trusted Publisher setup, so the initial authenticated publish is a one-time prerequisite documented in [the release guide](../../../docs/releasing.md).
 
@@ -28,6 +28,8 @@ Keep all package operations on Bun. A small adapter exchanges the GitHub workflo
 
 **Manual versioning and publication for every release.** This leaves the changelog, source tag, and registry artifact dependent on repeated manual coordination. A reviewable release PR collects those decisions and preserves an explicit release point.
 
+**End the job when the upload succeeds.** This would avoid waiting on registry propagation, but nothing would confirm that consumers can install and run the exact published version. A one-minute visibility window was also too short: it reported a successful upload as a failed release before the version appeared.
+
 **Publish using the npm CLI for its built-in OIDC support.** This introduces a second package manager despite the repository's Bun-only contract. The documented token exchange is small enough to keep local; Bun currently does not generate provenance attestations.
 
 ## Consequences
@@ -38,4 +40,5 @@ Keep all package operations on Bun. A small adapter exchanges the GitHub workflo
 - Uploaded PDFs and provider credentials are outside the package allowlist, and the package smoke test never opens the saved-session API.
 - The maintainer configures a GitHub Actions Trusted Publisher after the first authenticated npm publication; later releases need no persistent registry secret.
 - A GitHub Release can exist before npm publication succeeds. Recovery retries its original tag without duplicating a version or rolling back latest.
+- A publish job can spend up to five minutes waiting for npm metadata. If the version is still missing after that, the job fails even though the upload may have succeeded; retrying the tag then skips the upload and repeats verification.
 - The Bun OIDC adapter needs maintenance until Bun provides native trusted publishing; it provides short-lived authentication but no provenance attestation.
