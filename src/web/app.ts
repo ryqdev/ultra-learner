@@ -56,6 +56,7 @@ const sessionDeleteDialog = requiredElement<HTMLDialogElement>("session-delete-d
 const sessionDeleteFilename = requiredElement("session-delete-filename");
 const sessionDeleteCancel = requiredElement<HTMLButtonElement>("session-delete-cancel");
 const sessionDeleteConfirm = requiredElement<HTMLButtonElement>("session-delete-confirm");
+const themeColor = document.querySelector('meta[name="theme-color"]');
 
 readerView.style.setProperty("--chat-panel-min-width", `${MIN_CHAT_PANEL_WIDTH}px`);
 readerView.style.setProperty("--chat-panel-width", `${DEFAULT_CHAT_PANEL_WIDTH}px`);
@@ -222,6 +223,8 @@ function historyItem(session: SessionSummary): HTMLElement {
   openButton.dataset.sessionOpen = session.id;
   openButton.disabled = openingSessionId !== null || deletingSessionId !== null;
   openButton.setAttribute("aria-label", `Open ${session.filename}`);
+  // The collapsed sidebar shows only an icon per document, and a long name is cut short when expanded.
+  openButton.title = session.filename;
   if (activeSessionId === session.id) openButton.setAttribute("aria-current", "page");
 
   const icon = document.createElement("span");
@@ -264,8 +267,9 @@ function renderHistory(): void {
   historyList.replaceChildren(...sessions.map(historyItem));
   historyCount.hidden = sessions.length === 0;
   historyCount.textContent = `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`;
-  historyStatus.textContent = "";
-  historyStatus.hidden = true;
+  historyStatus.classList.remove("is-error");
+  historyStatus.textContent = sessions.length === 0 ? "PDFs you open will appear here." : "";
+  historyStatus.hidden = sessions.length > 0;
 }
 
 async function refreshHistory(): Promise<void> {
@@ -563,6 +567,9 @@ chatCollapse.addEventListener("click", () => setChatCollapsed(true));
 
 function showThemeState(isDark: boolean): void {
   for (const button of themeButtons) button.setAttribute("aria-pressed", String(isDark));
+  // Browsers that tint their own chrome from this tag would otherwise frame a dark reader in the light color.
+  const canvasColor = window.getComputedStyle(document.body).getPropertyValue("--canvas").trim();
+  if (canvasColor) themeColor?.setAttribute("content", canvasColor);
 }
 
 // The page's inline script has already applied the stored or system theme.

@@ -12,6 +12,7 @@ import {
 import { TextLayerBuilder } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 
 import { documentTitle, pdfFileValidationError, pdfOpenErrorMessage } from "../lib/files.ts";
+import { pagesRailStartsOpen } from "../lib/layout.ts";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -34,6 +35,7 @@ import { ReaderPdfLinkService } from "./pdf-link-service.ts";
 GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.mjs";
 
 const PAGE_RENDER_LOADING_DELAY_MS = 160;
+// The width of a thumbnail in the rail, in CSS pixels.
 const THUMBNAIL_WIDTH = 132;
 // Draw thumbnails one rail-height beyond the visible ones so ordinary scrolling rarely shows a blank.
 const THUMBNAIL_PRELOAD_MARGIN = "100% 0px";
@@ -182,7 +184,7 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = false;
     this.elements.readerError.hidden = true;
     this.elements.canvasFrame.hidden = true;
-    this.elements.readerView.classList.remove("sidebar-hidden");
+    this.elements.readerView.classList.toggle("sidebar-hidden", !pagesRailStartsOpen(window.innerWidth));
   }
 
   public async loadPdf(data: Uint8Array, filename: string, initialPage = 1): Promise<boolean> {
@@ -499,6 +501,8 @@ export class PdfReaderController {
     this.elements.readerLoading.hidden = true;
     this.elements.canvasFrame.hidden = true;
     this.elements.readerError.hidden = false;
+    // A document that never opened has no pages to list, so its rail would sit empty beside the message.
+    if (!this.state.document) this.elements.readerView.classList.add("sidebar-hidden");
   }
 
   private async calculateFitScale(page: PDFPageProxy): Promise<number> {
@@ -763,11 +767,13 @@ export class PdfReaderController {
    * the reader actually looks at rather than one canvas render per page.
    */
   private async renderThumbnails(pdf: PDFDocumentProxy): Promise<void> {
+    let placeholderWidth = THUMBNAIL_WIDTH;
     let placeholderHeight = Math.round(THUMBNAIL_WIDTH * Math.SQRT2);
     try {
-      // Reserve each thumbnail's final height up front; drawing must not move the rail under the reader.
-      const natural = (await pdf.getPage(1)).getViewport({ scale: 1 });
-      placeholderHeight = Math.floor(natural.height * (THUMBNAIL_WIDTH / natural.width));
+      // Reserve each thumbnail's final size up front; drawing must not move the rail under the reader.
+      const viewport = this.thumbnailViewport(await pdf.getPage(1));
+      placeholderWidth = Math.floor(viewport.width);
+      placeholderHeight = Math.floor(viewport.height);
     } catch {
       // The main view reports page failures; the rail keeps the default proportions.
     }
@@ -787,7 +793,7 @@ export class PdfReaderController {
       const wrapper = document.createElement("span");
       wrapper.className = "thumbnail-canvas-wrap";
       const canvas = document.createElement("canvas");
-      canvas.width = THUMBNAIL_WIDTH;
+      canvas.width = placeholderWidth;
       canvas.height = placeholderHeight;
       wrapper.append(canvas);
       button.append(number, wrapper);
@@ -835,6 +841,16 @@ export class PdfReaderController {
     });
   }
 
+  /**
+   * The viewport a thumbnail is drawn through. Its canvas holds as many pixels as the
+   * rail slot covers on this display, up to the density the main page uses, so a
+   * thumbnail is not a stretched low-resolution image on a high-density screen.
+   */
+  private thumbnailViewport(page: PDFPageProxy): ReturnType<PDFPageProxy["getViewport"]> {
+    const density = Math.min(window.devicePixelRatio || 1, 2);
+    return page.getViewport({ scale: (THUMBNAIL_WIDTH * density) / page.getViewport({ scale: 1 }).width });
+  }
+
   private async drawThumbnail(
     pdf: PDFDocumentProxy,
     button: HTMLButtonElement,
@@ -844,8 +860,7 @@ export class PdfReaderController {
     try {
       const page = await pdf.getPage(Number(button.dataset.page));
       if (this.mainPageRendering || this.state.document !== pdf) return "interrupted";
-      const natural = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: THUMBNAIL_WIDTH / natural.width });
+      const viewport = this.thumbnailViewport(page);
       thumbnail.width = Math.floor(viewport.width);
       thumbnail.height = Math.floor(viewport.height);
       const renderTask = page.render({ canvas: thumbnail, viewport });

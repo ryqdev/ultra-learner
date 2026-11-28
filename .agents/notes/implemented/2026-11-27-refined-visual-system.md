@@ -12,9 +12,9 @@ The interface read as a prototype rather than a finished reading tool. Interface
 
 Interface text uses an 11.5–15.5px scale in the platform's system sans-serif. Monospace is limited to Base URL and API key values. The Library headline pairs a display sans with a serif italic accent word. Every font is a system font stack (SF Pro, Iowan Old Style, and SF Mono on Apple platforms, with Inter, Segoe UI, and Georgia-class fallbacks elsewhere), so the reader serves no font files and stays fully offline.
 
-The Library upload card is a solid surface whose dashed drop guide appears only while a file is dragged over it. Recents rows reveal their delete control on hover or focus, and it is always visible on devices without hover. In reading mode the control strip is forty-four pixels tall, slightly translucent, and groups page and zoom controls into recessed segments instead of separating them with dividers. Thumbnails are shown at their 132-pixel render width, with the page number below. Overlay panels cast their shadow only while open.
+The Library upload card is a solid surface whose dashed drop guide appears only while a file is dragged over it. Recents rows reveal their delete control on hover or focus, and it is always visible on devices without hover. In reading mode the control strip is forty-four pixels tall, slightly translucent, and groups page and zoom controls into recessed segments instead of separating them with dividers. Thumbnails fill a 132-pixel slot, with the page number below, and are drawn at the display's pixel density up to the 2× cap the main page uses, so they are not stretched on a high-density screen. The reading stage, like the side panels, uses thin scrollbars in the theme's colors. Overlay panels cast their shadow only while open.
 
-Markup, element IDs, class names toggled by browser code, layout breakpoints, and grid mechanics are unchanged. The canvas frame's margin stays within the 28 pixels per side that fit-to-view reserves.
+Markup, element IDs, class names toggled by browser code, layout breakpoints, and grid mechanics are unchanged. The canvas frame's margin stays within the 28 pixels per side that fit-to-view reserves. The stage is a grid whose side tracks are at least 24 pixels wide, so a page zoomed past the stage keeps that gutter at both ends of its scroll range instead of touching the panels.
 
 ## Alternatives considered
 
@@ -32,6 +32,7 @@ Markup, element IDs, class names toggled by browser code, layout breakpoints, an
 
 - Interface text is readable at normal viewing distances, and the controls look settled rather than provisional.
 - A visual change is a token edit in one place. A new component should use the existing tokens rather than literal colors, so that both themes keep working.
+- A thumbnail canvas holds up to four times the pixels it did at one device pixel per CSS pixel. Thumbnails are still drawn only near the visible part of the rail.
 - Rendering varies a little by platform because the fonts are system fonts. The screenshots used for review come from a Linux container, where Inter and Liberation Serif stand in.
 - The reader strip is four pixels taller than the [focused reader chrome](2026-08-28-focused-reader-chrome.md) originally specified, so it gives the page that much less height in exchange for comfortable click targets.
 - The dashed drop guide and the delete control in Recents depend on hover and drag states, so touch devices keep the delete control visible.
